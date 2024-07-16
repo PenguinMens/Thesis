@@ -1,0 +1,11 @@
+{
+    "cmake.sourceDirectory": "/home/gabriel/Thesis/thesis_ws",
+    "files.associations": {
+        "pico_uart_transports.h": "c",
+        "motor_control.h": "c",
+        "stdlib.h": "c",
+        "rmw_microros.h": "c",
+        "rcl.h": "c",
+        "error_handling.h": "c"
+    }
+}

@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <time.h>
 #include "pico/stdlib.h"
 
 #include <uxr/client/profile/transport/custom/custom_transport.h>
@@ -19,14 +18,7 @@ int clock_gettime(clockid_t unused, struct timespec *tp)
 
 bool pico_serial_transport_open(struct uxrCustomTransport * transport)
 {
-    // Ensure that stdio_init_all is only called once on the runtime
-    static bool require_init = true;
-    if(require_init)
-    {
-        stdio_init_all();
-        require_init = false;
-    }
-
+    stdio_init_all();
     return true;
 }
 
