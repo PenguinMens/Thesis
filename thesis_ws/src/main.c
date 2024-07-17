@@ -47,14 +47,14 @@ const uint LED_PIN = 25;
 Odometry_values odo_vals;
 // incrimenting puiblisher
 rcl_publisher_t publisher, publisher_imu, publisher_twist, publisher_odomoter, publisher_pid;
-rcl_subscription_t cmd_vel_subscriber;
+rcl_subscription_t cmd_vel_subscriber, pid_terms_subscriber;
 
 
 std_msgs__msg__Int32 msg;
 sensor_msgs__msg__Imu imu_msg;
 geometry_msgs__msg__Twist geo_msg;
 nav_msgs__msg__Odometry odo_msg;
-control_msgs__msg__PidState pid_msg;
+control_msgs__msg__PidState pid_msg,pid_in;
 
 //subscriber for input
 
@@ -80,6 +80,7 @@ void timer2_callback(rcl_timer_t * timer, int64_t last_call_time);
 void timer3_callback(rcl_timer_t * timer, int64_t last_call_time);
 void sendMotorDataCSV();
 void publish_odo();
+void pid_in_callback(const void * msgin);
 
 
 
@@ -103,7 +104,7 @@ int main(){
     gpio_set_dir(6, GPIO_OUT);
     gpio_put(6, 1);
     init_i2c();
-    float kp =  350.0;
+    float kp =  200.0;
     float ki =50.0;  
     float kd = 10.0;
 
@@ -176,6 +177,12 @@ int main(){
             ROSIDL_GET_MSG_TYPE_SUPPORT(control_msgs,msg, PidState),
             "pico_pid");
 
+        rclc_subscription_init_best_effort(
+            &pid_terms_subscriber,
+            &node,
+            ROSIDL_GET_MSG_TYPE_SUPPORT(control_msgs,msg, PidState),
+            "/pid_terms");
+
         // subscriber for cmdvel
         rclc_subscription_init_best_effort(&cmd_vel_subscriber,
             &node,
@@ -184,7 +191,7 @@ int main(){
 
 
         rclc_executor_init(&executor, &support.context,
-            5,
+            6,
             &allocator);
 
         // timer for mtoor controll
@@ -203,8 +210,9 @@ int main(){
         rclc_timer_init_default(
             &timer3,
             &support,
-            RCL_MS_TO_NS(20),
+            RCL_MS_TO_NS(100),
             timer3_callback);
+
         rclc_executor_add_timer(&executor, &timer);
         rclc_executor_add_timer(&executor, &timer2);
         rclc_executor_add_timer(&executor, &timer3);
@@ -212,6 +220,11 @@ int main(){
             &cmd_vel_subscriber,
             &geo_msg,
             &cmd_vel_callback,
+            ON_NEW_DATA);
+        rclc_executor_add_subscription(&executor,
+            &pid_terms_subscriber,
+            &pid_in,
+            &pid_in_callback,
             ON_NEW_DATA);
 
     #else    
@@ -303,6 +316,13 @@ void timer_callback(rcl_timer_t * timer, int64_t last_call_time){
 void timer2_callback(rcl_timer_t * timer, int64_t last_call_time){	
 
     rcl_publish(&publisher, &msg, NULL);
+}
+
+void pid_in_callback(const void * msgin)
+{
+    pid_set_gains(&leftMotor.motorStats.pid, pid_in.p_term, pid_in.i_term, pid_in.d_term);
+    pid_set_gains(&rightMotor.motorStats.pid, pid_in.p_term, pid_in.i_term, pid_in.d_term);
+
 }
 
 void motor_iteration( uint64_t last_call_time) // probaby makes more sense to call this a motor iteration
@@ -404,11 +424,11 @@ int controlMotorsPID(float dt)
     //     headersPrinted = true;
     // }
 
-    float outputA = pid_update(&leftMotor.motorStats.pid, leftMotor.motorStats.velocity, dt);
+    double outputA = pid_update(&leftMotor.motorStats.pid, leftMotor.motorStats.velocity, dt);
     float pwmA =  fabs(outputA);
     if (pwmA > PWM_MAX) pwmA = PWM_MAX;
     
-    float outputB = pid_update(&rightMotor.motorStats.pid, rightMotor.motorStats.velocity, dt);
+    double outputB = pid_update(&rightMotor.motorStats.pid, rightMotor.motorStats.velocity, dt);
     float pwmB = fabs(outputB);
     if (pwmB > PWM_MAX) pwmB = PWM_MAX;
     

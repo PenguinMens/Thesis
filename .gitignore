@@ -36,5 +36,7 @@
 /build
 /install
 
-
+log/
+build/
+install/
 .vscode/

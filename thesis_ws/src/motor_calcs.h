@@ -1,5 +1,3 @@
-// encoder_init.h
-
 #ifndef MOTOR_CALCS_H
 #define MOTOR_CALCS_H
 

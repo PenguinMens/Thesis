@@ -10,15 +10,15 @@
 
 // Declare the PIDController structure
 typedef struct {
-    float Kp;           // Proportional gain
-    float Ki;           // Integral gain
-    float Kd;           // Derivative gain
-    float setpoint;     // Desired setpoint
-    float error;        // Current error
-    float integral;     // Integral term
-    float derivative;   // Derivative term
-    float previous_error;  // Previous error for derivative term calculation
-    float output;
+    double Kp;           // Proportional gain
+    double Ki;           // Integral gain
+    double Kd;           // Derivative gain
+    double setpoint;     // Desired setpoint
+    double error;        // Current error
+    double integral;     // Integral term
+    double derivative;   // Derivative term
+    double previous_error;  // Previous error for derivative term calculation
+    double output;
 } PIDController;
 
 // Declare function prototypes
@@ -32,7 +32,7 @@ typedef struct {
  * @param Kd Derivative gain.
  * @param setpoint Desired setpoint. 
  */
-void pid_init(PIDController* pid, float Kp, float Ki, float Kd, float setpoint);
+void pid_init(PIDController* pid, double Kp, double Ki, double Kd, double setpoint);
 
 /**
  * @brief Update the PID controller and compute the control output.
@@ -42,7 +42,7 @@ void pid_init(PIDController* pid, float Kp, float Ki, float Kd, float setpoint);
  * @param dt Time step (in seconds) since the last update.
  * @return Control output.
  */
-float pid_update(PIDController* pid, float input, float dt);
+double pid_update(PIDController* pid, double input, double dt);
 
 /**
  * @brief Set a new setpoint for the PID controller.
@@ -50,7 +50,7 @@ float pid_update(PIDController* pid, float input, float dt);
  * @param pid Pointer to the PIDController structure.
  * @param setpoint New desired setpoint.
  */
-void pid_set_setpoint(PIDController* pid, float setpoint);
+void pid_set_setpoint(PIDController* pid, double setpoint);
 
 /**
  * @brief Reset the state of the PID controller.
