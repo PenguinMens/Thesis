@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE xml>
+<launch>
+  <arg name="filename" default="robot_visual" />
+  <node pkg="robot_state_publisher" exec="robot_state_publisher">
+    <param name="robot_description"
+      value="$(command 'xacro $(find-pkg-share robot_visual)/urdf/$(var filename).urdf.xacro')" />
+  </node>
+  <node pkg="joint_state_publisher_gui" exec="joint_state_publisher_gui" />
+  <node pkg="rviz2" exec="rviz2"
+    args="-d $(find-pkg-share robot_visual)/config/$(var filename).rviz" />
+</launch>
