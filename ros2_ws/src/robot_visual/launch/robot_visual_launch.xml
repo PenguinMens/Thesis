@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE xml>
 <launch>
-  <arg name="filename" default="robot_visual" />
+  <arg name="filename" default="robot" />
   <node pkg="robot_state_publisher" exec="robot_state_publisher">
     <param name="robot_description"
       value="$(command 'xacro $(find-pkg-share robot_visual)/urdf/$(var filename).urdf.xacro')" />
