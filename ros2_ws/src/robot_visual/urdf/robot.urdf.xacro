@@ -2,4 +2,5 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name= "robot_visual">
     <xacro:include filename="robot_visual.urdf.xacro"/>
     <xacro:include filename="gazebo_control.xacro"/>
+    <xacro:include filename="lidar.xacro" />
 </robot>
