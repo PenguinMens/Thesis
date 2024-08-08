@@ -45,54 +45,27 @@ float AVERAGED2 = 0;
 //     return ((rpm3) * (M_PI * 2 * .025)) / ( 60);
 // }
 
-// Function to calculate motor statistics and update odometry values
 void calc_stats(float time, Odometry_values *vals, int32_t ENCODER1_TICKS, int32_t ENCODER2_TICKS, MotorStats *motorStatsA, MotorStats *motorStatsB) {
-    // Calculate rotations per minute (RPM) for each motor
-    int32_t pulse_count_1 = ENCODER1_TICKS;
-    int32_t pulse_count_2 = ENCODER2_TICKS;
-    float rmp_1 = (pulse_count_1 * 60 * 1000) / (encoder_setup.PULSES_PER_REV * time);
-    float rmp_2 = (pulse_count_2 * 60 * 1000) / (encoder_setup.PULSES_PER_REV * time);
+    // Calculate the current position (angle) of each wheel
+    float pos_1 = (float)ENCODER1_TICKS * (2 * (22/7) / encoder_setup.PULSES_PER_REV);
+    float pos_2 = (float)ENCODER2_TICKS * (2 * (22/7) / encoder_setup.PULSES_PER_REV);
 
-    // Update motor statistics with calculated RPM values
-    motorStatsA->rps = rmp_1;
-    motorStatsB->rps = rmp_2;
+    // Calculate the velocity for each wheel
+    float vel_1 = (pos_1 - motorStatsA->last_position) / time;
+    float vel_2 = (pos_2 - motorStatsB->last_position) / time;
 
-    // Calculate linear velocity for each motor
-
-    float v1 = (rmp_1 * 0.10472f * encoder_setup.WHEEL_DIAMETER);
-    float v2 = (rmp_2 * 0.10472f * encoder_setup.WHEEL_DIAMETER);
-
-    // Moving average calculation for motor velocities
-    // SUM = SUM - READINGS[INDEX];        // Remove the oldest entry from the sum
-    // VALUE = v1;                         // Read the next sensor value
-    // READINGS[INDEX] = VALUE;            // Add the newest reading to the window
-    // SUM = SUM + VALUE;                  // Add the newest reading to the sum
-    // INDEX = (INDEX + 1) % WINDOW_SIZE;  // Increment the index, and wrap to 0 if it exceeds the window size
-    //AVERAGED = SUM / WINDOW_SIZE;       // Calculate the average velocity
-    AVERAGED = v1;
-
-    // SUM2 = SUM2 - READINGS2[INDEX2];       // Remove the oldest entry from the sum
-    // VALUE2 = v2;                           // Read the next sensor value
-    // READINGS2[INDEX2] = VALUE2;            // Add the newest reading to the window
-    // SUM2 = SUM2 + VALUE2;                  // Add the newest reading to the sum
-    // INDEX2 = (INDEX2 + 1) % WINDOW_SIZE;   // Increment the index, and wrap to 0 if it exceeds the window size
-    // //AVERAGED2 = SUM2 / WINDOW_SIZE;        // Calculate the average velocity
-    AVERAGED2 = v2;
-
-    // Update motor statistics with averaged velocity values
-    motorStatsA->velocity = AVERAGED;
-    motorStatsB->velocity = AVERAGED2;
+    // Update motor statistics with the current position and velocity
+    motorStatsA->last_position = pos_1;
+    motorStatsB->last_position = pos_2;
+    motorStatsA->velocity = vel_1;
+    motorStatsB->velocity = vel_2;
 
     // Calculate linear and angular velocities for odometry
-    vals->linear_velocity = (( v1  + v2) ) / (2.0f);
-    vals->angular_velocity = ((v2 - v1  ) ) / (encoder_setup.WHEEL_BASE);
+    vals->linear_velocity = (vel_1 * encoder_setup.WHEEL_DIAMETER / 2.0f + vel_2 * encoder_setup.WHEEL_DIAMETER / 2.0f) / 2.0f;
+    vals->angular_velocity = (vel_2 * encoder_setup.WHEEL_DIAMETER / 2.0f - vel_1 * encoder_setup.WHEEL_DIAMETER / 2.0f) / encoder_setup.WHEEL_BASE;
 
-
-    // Calculate new position and orientation based on velocities
-    // vals->x += vals->linear_velocity * cos(vals->theta) * time / 1000.0f;
-    // vals->y += vals->linear_velocity * sin(vals->theta) * time / 1000.0f;
-    // vals->theta += vals->angular_velocity * time / 1000.0f;
-    vals->x = 0;
-    vals->y = 0;
-    vals->theta =0;
+    // Update odometry (x, y, theta) if needed
+    vals->x += vals->linear_velocity * cos(vals->theta) * time;
+    vals->y += vals->linear_velocity * sin(vals->theta) * time;
+    vals->theta += vals->angular_velocity * time;
 }

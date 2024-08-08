@@ -32,6 +32,7 @@ typedef struct MotorStats {
     float velocity;           // Current velocity of the motor
     float rps;                // Rotations per second of the motor
     float PWM;           // PWM value for motor control
+    float last_position;      // Last position of the motor
     PIDController pid;        // PID controller for motor control
 } MotorStats;
 
