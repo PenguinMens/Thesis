@@ -46,26 +46,59 @@ float AVERAGED2 = 0;
 // }
 
 void calc_stats(float time, Odometry_values *vals, int32_t ENCODER1_TICKS, int32_t ENCODER2_TICKS, MotorStats *motorStatsA, MotorStats *motorStatsB) {
-    // Calculate the current position (angle) of each wheel
-    float pos_1 = (float)ENCODER1_TICKS * (2 * (22/7) / encoder_setup.PULSES_PER_REV);
-    float pos_2 = (float)ENCODER2_TICKS * (2 * (22/7) / encoder_setup.PULSES_PER_REV);
+    // Start of function debug
+    // - printf("calc_stats called with:\n");
+    // - printf("    time: %f\n", time);
+    // - printf("    ENCODER1_TICKS: %d    ENCODER2_TICKS: %d\n", ENCODER1_TICKS, ENCODER2_TICKS);
+    // - printf("    Last angular_pos_1: %f    Last angular_pos_2: %f\n", motorStatsA->last_angular_position, motorStatsB->last_angular_position);
+    // - printf("    Last angular_vel_1: %f    Last angular_vel_2: %f\n", motorStatsA->angular_velocity, motorStatsB->angular_velocity);
 
-    // Calculate the velocity for each wheel
-    float vel_1 = (pos_1 - motorStatsA->last_position) / time;
-    float vel_2 = (pos_2 - motorStatsB->last_position) / time;
+    // Calculate the current angular position (in radians) of each wheel
+    float angular_pos_1 = (float)ENCODER1_TICKS * (2.0f * M_PI / encoder_setup.PULSES_PER_REV);
+    float angular_pos_2 = (float)ENCODER2_TICKS * (2.0f * M_PI / encoder_setup.PULSES_PER_REV);
 
-    // Update motor statistics with the current position and velocity
-    motorStatsA->last_position = pos_1;
-    motorStatsB->last_position = pos_2;
-    motorStatsA->velocity = vel_1;
-    motorStatsB->velocity = vel_2;
+    // - printf("    Calculated angular_pos_1: %f    Calculated angular_pos_2: %f\n", angular_pos_1, angular_pos_2);
+
+    // Calculate the angular velocity for each wheel in rad/s
+    float angular_vel_1 = (angular_pos_1 - motorStatsA->last_angular_position) / time;
+    float angular_vel_2 = (angular_pos_2 - motorStatsB->last_angular_position) / time;
+
+    // - printf("    Calculated angular_vel_1: %f rad/s    Calculated angular_vel_2: %f rad/s\n", angular_vel_1, angular_vel_2);
+
+    // Calculate RPM for each wheel
+    float rpm_1 = (angular_vel_1 * 60.0f) / (2.0f * M_PI);
+    float rpm_2 = (angular_vel_2 * 60.0f) / (2.0f * M_PI);
+
+    // - printf("    Calculated RPM_1: %f RPM    Calculated RPM_2: %f RPM\n", rpm_1, rpm_2);
+
+    // Update motor statistics with the current position, velocity, and RPM
+    motorStatsA->last_angular_position = angular_pos_1;
+    motorStatsB->last_angular_position = angular_pos_2;
+    motorStatsA->angular_velocity = angular_vel_1;
+    motorStatsB->angular_velocity = angular_vel_2;
+    motorStatsA->rpm = rpm_1;
+    motorStatsB->rpm = rpm_2;
+
+    // - printf("    Updated last_angular_position pos_1: %f    pos_2: %f\n", motorStatsA->last_angular_position, motorStatsB->last_angular_position);
+    // - printf("    Updated angular_velocity vel_1: %f rad/s    vel_2: %f rad/s\n", motorStatsA->angular_velocity, motorStatsB->angular_velocity);
+    // - printf("    Updated RPM_1: %f RPM    RPM_2: %f RPM\n", motorStatsA->rpm, motorStatsB->rpm);
 
     // Calculate linear and angular velocities for odometry
-    vals->linear_velocity = (vel_1 * encoder_setup.WHEEL_DIAMETER / 2.0f + vel_2 * encoder_setup.WHEEL_DIAMETER / 2.0f) / 2.0f;
-    vals->angular_velocity = (vel_2 * encoder_setup.WHEEL_DIAMETER / 2.0f - vel_1 * encoder_setup.WHEEL_DIAMETER / 2.0f) / encoder_setup.WHEEL_BASE;
+    float linear_velocity_1 = angular_vel_1 * encoder_setup.WHEEL_DIAMETER/2;
+    float linear_velocity_2 = angular_vel_2 * encoder_setup.WHEEL_DIAMETER/2;
+
+    vals->linear_velocity = (linear_velocity_1 + linear_velocity_2) / 2.0f;
+    vals->angular_velocity = (linear_velocity_2 - linear_velocity_1) / encoder_setup.WHEEL_BASE;
+
+    // - printf("    Calculated linear_velocity: %f m/s    angular_velocity: %f rad/s\n", vals->linear_velocity, vals->angular_velocity);
 
     // Update odometry (x, y, theta) if needed
     vals->x += vals->linear_velocity * cos(vals->theta) * time;
     vals->y += vals->linear_velocity * sin(vals->theta) * time;
     vals->theta += vals->angular_velocity * time;
+
+    // - printf("    Updated odometry x: %f    y: %f    theta: %f\n", vals->x, vals->y, vals->theta);
+
+    // End of function debug
+    // - printf("calc_stats completed.\n");
 }

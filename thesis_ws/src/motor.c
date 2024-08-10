@@ -26,7 +26,7 @@ void init_motor(Motor *motor, uint PWM, uint IN1, uint IN2, uint ENCODER_PINS, f
     motor->IN1_PIN = IN1;
     motor->IN2_PIN = IN2;
     motor->ENCODER_PINS = ENCODER_PINS;
-    
+    motor->motorStats.last_angular_position= 0.0f;
 
     pid_init(&(motor->motorStats.pid), kp, ki, kd, setpoint);
 
