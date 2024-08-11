@@ -1,6 +1,5 @@
-#include <math.h>
-#include <inttypes.h>
 #include <stdio.h>
+
 // ROS 2
 #include <rcl/rcl.h>
 #include <rcl/error_handling.h>
@@ -8,6 +7,9 @@
 #include <rclc/executor.h>
 #include <std_msgs/msg/int32.h>
 #include <std_msgs/msg/float32.h>
+#include <std_msgs/msg/string.h>
+#include <control_msgs/msg/pid_state.h>
+#include <nav_msgs/msg/odometry.h>
 
 // Pico SDK
 #include "pico/stdlib.h"
@@ -18,201 +20,63 @@
 #include "encoder.h"
 #include "motor.h"
 #include "motor_calcs.h"
-
-// Define constants
 #define PWM_MAX 50.0f
-#define ROS_MODE 0
 
-// Global Variables
-rcl_publisher_t left_enc_publisher, right_enc_publisher,test_publisher;
-rcl_subscription_t left_wheel_cmd_subscriber, right_wheel_cmd_subscriber;
+const uint LED_PIN = 25;
 
-std_msgs__msg__Int32 left_enc_msg, right_enc_msg;
-std_msgs__msg__Float32 left_wheel_cmd_msg, right_wheel_cmd_msg, test_msg;
-
-rcl_timer_t timer, timer2;
-rcl_node_t node;
-rcl_allocator_t allocator;
-rclc_support_t support;
-rclc_executor_t executor;
-
+rcl_publisher_t pico_string_publisher, pico_float_publisher, publisher_odomoter;
+std_msgs__msg__String msg_string_pid, msg_string_test;
+std_msgs__msg__Float32 msg_float_left, msg_float_right, float_test;
+control_msgs__msg__PidState pid_msg, pid_in;
+nav_msgs__msg__Odometry odo_msg;
 Motor leftMotor, rightMotor;
 Odometry_values odo_vals;
-
-// Encoder pins
 const uint ENCODERA = 0;
 const uint ENCODERB = 1;
 
+float test = -1.0f;
 
-// Function prototypes
-void encoder_timer_callback(rcl_timer_t * timer, int64_t last_call_time);
-void pid_timer_callback(rcl_timer_t * timer, int64_t last_call_time);
-void left_wheel_cmd_callback(const void * msgin);
-void right_wheel_cmd_callback(const void * msgin);
+// Callback functions for ENCODER
 
-
-
-int main(){
-    stdio_init_all(); // Initialize all configured stdio types
-
-    // Initialize motors
-    float kp = 0, ki = 0, kd = 0;
-    init_motor(&leftMotor, MOTOR1_PWM, MOTOR1_IN1, MOTOR1_IN2, MOTOR1_ENCODER, kp, ki, kd, 0);
-    init_motor(&rightMotor, MOTOR2_PWM, MOTOR2_IN1, MOTOR2_IN2, MOTOR2_ENCODER, kp, ki, kd, 0);
-    
-    // Initialize encoders
-    init_PIO_encoder(MOTOR1_ENCODER, MOTOR2_ENCODER, ENCODERA, ENCODERB);
-
-    // ROS 2 Initialization
-    #if ROS_MODE
-        rmw_uros_set_custom_transport(
-            true,
-            NULL,
-            pico_serial_transport_open,
-            pico_serial_transport_close,
-            pico_serial_transport_write,
-            pico_serial_transport_read
-        );
-        allocator = rcl_get_default_allocator();
-
-        const int timeout_ms = 1000;
-        const uint8_t attempts = 120;
-
-        rcl_ret_t ret = rmw_uros_ping_agent(timeout_ms, attempts);
-        if (ret != RCL_RET_OK){
-            // Unreachable agent, exiting program.
-            return ret;
-        }
-
-        rclc_support_init(&support, 0, NULL, &allocator);
-        rclc_node_init_default(&node, "pico_node", "", &support);
-
-        // Initialize publishers for encoder values
-        rclc_publisher_init_default(
-            &left_enc_publisher,
-            &node,
-            ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
-            "left_wheel_enc"
-        );
-
-        rclc_publisher_init_default(
-            &right_enc_publisher,
-            &node,
-            ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
-            "right_wheel_enc"
-        );
-
-        rclc_publisher_init_default(
-            &test_publisher,
-            &node,
-            ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-            "test"
-        );
-
-        // Initialize subscribers for wheel commands
-        rclc_subscription_init_best_effort(
-            &left_wheel_cmd_subscriber,
-            &node,
-            ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-            "/left_wheel_cmd"
-        );  
-
-        rclc_subscription_init_best_effort(
-            &right_wheel_cmd_subscriber,
-            &node,
-            ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-            "/right_wheel_cmd"
-        );
-
-        // Initialize timer for encoder publishing
-        rclc_timer_init_default(
-            &timer,
-            &support,
-            RCL_MS_TO_NS(100),
-            encoder_timer_callback
-        );
-
-
-
-        rclc_timer_init_default(
-            &timer2,
-            &support,
-            RCL_MS_TO_NS(100),
-            pid_timer_callback
-        );
-        // Initialize executor and add handles
-        rclc_executor_init(&executor, &support.context, 6, &allocator);
-        rclc_executor_add_timer(&executor, &timer);
-        rclc_executor_add_timer(&executor, &timer2);
-        rclc_executor_add_subscription(&executor, &left_wheel_cmd_subscriber, &left_wheel_cmd_msg, &left_wheel_cmd_callback, ON_NEW_DATA);
-        rclc_executor_add_subscription(&executor, &right_wheel_cmd_subscriber, &right_wheel_cmd_msg, &right_wheel_cmd_callback, ON_NEW_DATA);
-
-    #endif
-    leftMotor.motorStats.pid.setpoint = 0.5;
-    // Main lo
-    while (true) {
-        #if ROS_MODE
-            rclc_executor_spin_some(&executor, RCL_MS_TO_NS(10));
-        #else
-
-            calc_stats(1, &odo_vals, get_encoder_count_A(), get_encoder_count_B(), &leftMotor.motorStats, &rightMotor.motorStats);
-            // After updating motor statistics
-            printf("    Updated angular_pos_1: %f    angular_pos_2: %f\n", leftMotor.motorStats.last_angular_position, rightMotor.motorStats.last_angular_position);    
-            printf("    Updated angular_vel_1: %f rad/s    angular_vel_2: %f rad/s\n", leftMotor.motorStats.angular_velocity, rightMotor.motorStats.angular_velocity);
-            motor_iteration(1000);
-            // printf("LEFT MOTOR COUNT: %d \nRIGHT MOTOR COUNT %d \n",get_encoder_count_A(), get_encoder_count_B() );
-            sleep_ms(1000);
-        #endif
-    }
-
-    return 0;
-}
-
-// Callback for the encoder timer
-void encoder_timer_callback(rcl_timer_t * timer, int64_t last_call_time){    
-    left_enc_msg.data = get_encoder_count_A();
-    right_enc_msg.data = get_encoder_count_B();
-
-    rcl_publish(&left_enc_publisher, &left_enc_msg, NULL);
-    rcl_publish(&right_enc_publisher, &right_enc_msg, NULL);
-
-
-    calc_stats(0.1, &odo_vals, get_encoder_count_A(), get_encoder_count_B(), &leftMotor.motorStats, &rightMotor.motorStats);
-    test_msg.data = leftMotor.motorStats.angular_velocity;
-    rcl_publish(&test_publisher, &test_msg, NULL);
-
-}
-
-void motor_iteration(int32_t dt)
+void publish_odo()
 {
-        // Example PID control code
-    // Assuming you have a control_motor_PID function
+    uint64_t curr_time = time_us_64();
+    odo_msg.header.frame_id.data = "odom";
+    odo_msg.child_frame_id.data = "base_link";
+    odo_msg.header.stamp.sec = (int32_t) (curr_time/1000000);
+    odo_msg.header.stamp.nanosec = (int32_t) (curr_time%1000000)*1000;
 
-    // Print the last call time for debugging
-   // printf("PID Timer Callback: last_call_time = %" PRIu64 "\n", last_call_time);
+    odo_msg.pose.pose.position.x = odo_vals.x; // x position
+    odo_msg.pose.pose.position.y = odo_vals.y; // y position
+    odo_msg.pose.pose.position.z = 0.0; // z position
+    // set the orientation
+    odo_msg.pose.pose.orientation.x = 0.0; // x orientation 
+    odo_msg.pose.pose.orientation.y = 0.0; // y orientation
+    odo_msg.pose.pose.orientation.z =0;
+    // odo_msg.pose.pose.orientation.w = 0.0; // w orientation
+    // set the linear velocity 
+    odo_msg.twist.twist.linear.z =0;
+    odo_msg.twist.twist.linear.x = leftMotor.motorStats.angular_velocity;
+    odo_msg.twist.twist.linear.y =rightMotor.motorStats.angular_velocity;;
 
-    calc_stats(1000, &odo_vals, get_encoder_count_A(), get_encoder_count_B(), &leftMotor.motorStats, &rightMotor.motorStats);
+    // set the angular velocity 
+    odo_msg.twist.twist.angular.x = leftMotor.motorStats.pid.error;
+    odo_msg.twist.twist.angular.y = leftMotor.motorStats.pid.setpoint;
+    odo_msg.twist.twist.angular.z = leftMotor.motorStats.pid.output;
+    rcl_publish(&publisher_odomoter, &odo_msg, NULL);
+}
 
-    // Print the updated angular velocities after calling calc_stats
-    printf("After calc_stats:\n");
-    printf("    leftMotor angular_velocity: %f rad/s\n", leftMotor.motorStats.angular_velocity);
-    printf("    rightMotor angular_velocity: %f rad/s\n", rightMotor.motorStats.angular_velocity);
+void motor_iteration(double dt)
+{
+
 
     double outputA = pid_update(&leftMotor.motorStats.pid, leftMotor.motorStats.angular_velocity, dt);
     double outputB = pid_update(&rightMotor.motorStats.pid, rightMotor.motorStats.angular_velocity, dt);
-
-    // Print the PID output values
-    printf("PID Outputs:\n");
-    printf("    leftMotor PID output: %f\n", outputA);
-    printf("    rightMotor PID output: %f\n", outputB);
-
+    
     float pwmA = fabs(outputA);
     float pwmB = fabs(outputB);
 
-    // Print the PWM values before limiting
-    printf("PWM Values before limiting:\n");
-    printf("    leftMotor PWM: %f\n", pwmA);
-    printf("    rightMotor PWM: %f\n", pwmB);
+
 
     if (pwmA > PWM_MAX) {
         pwmA = PWM_MAX;
@@ -221,61 +85,238 @@ void motor_iteration(int32_t dt)
         pwmB = PWM_MAX;
     }
 
-    // Print the PWM values after limiting
-    printf("PWM Values after limiting:\n");
-    printf("    leftMotor PWM: %f\n", pwmA);
-    printf("    rightMotor PWM: %f\n", pwmB);
 
     control_motor(rightMotor, outputB, pwmB);
     control_motor(leftMotor, outputA, pwmA);
 
-    // Print the final PWM values being applied to the motors
-    printf("Final PWM Values applied:\n");
-    printf("    leftMotor PWM: %f\n", pwmA);
-    printf("    rightMotor PWM: %f\n", pwmB);
 
     rightMotor.motorStats.PWM = outputB;
     leftMotor.motorStats.PWM = outputA;
 
-    // // Debug statement for test publishing
-    // test_msg.data = 1.0f;
-    // printf("Test message data set to %f\n", test_msg.data);
-    //rcl_publish(&test_publisher, &test_msg, NULL);
-}
-// PID loop timer callback
-void pid_timer_callback(rcl_timer_t * timer, int64_t last_call_time){
-
-
 }
 
-// Callback for left wheel command subscriber
-void left_wheel_cmd_callback(const void * msgin){
-    const std_msgs__msg__Float32 * msg = (const std_msgs__msg__Float32 *)msgin;
 
-    // Control left motor based on the received command
-    pid_set_setpoint(&rightMotor.motorStats.pid, msg->data);
+void timer_callback1(rcl_timer_t *timer, int64_t last_call_time)
+{   
+
+    float dt = last_call_time/1000000000.0f;
+    calc_stats(dt, &odo_vals, get_encoder_count_A(), get_encoder_count_B(), &leftMotor.motorStats, &rightMotor.motorStats);
+    publish_odo();
 }
 
-// Callback for right wheel command subscriber
-void right_wheel_cmd_callback(const void * msgin){
-    const std_msgs__msg__Float32 * msg = (const std_msgs__msg__Float32 *)msgin;
+void timer_callback2(rcl_timer_t *timer, int64_t last_call_time)
+{
 
-    // Control right motor based on the received command
-    pid_set_setpoint(&rightMotor.motorStats.pid, msg->data);
+    // msg_string_test.data.data = msg_string_pid.data.data;
+    // msg_string_test.data.size = strlen(msg_string_test.data.data);
+    // rcl_ret_t ret = rcl_publish(&pico_string_publisher, &msg_string_test, NULL);
+
+    // Publish the PID Kp value for debugging (if necessary)
+    float dt = last_call_time/1000000000.0f;
+    float_test.data = dt;
+    rcl_publish(&pico_float_publisher, &float_test, NULL);
+    motor_iteration(dt);
+    // ret = rcl_publish(&pico_float_publisher, &float_test, NULL);
+}
+void print_pid_terms()
+{
+    char pid_string[50];
+    sprintf(pid_string, "PID: P=%f, I=%f, D=%f", leftMotor.motorStats.pid.Kp, leftMotor.motorStats.pid.Ki, leftMotor.motorStats.pid.Kd);
+    msg_string_pid.data.data = pid_string;
+    msg_string_pid.data.size = strlen(pid_string);
+    rcl_ret_t ret = rcl_publish(&pico_string_publisher, &msg_string_pid, NULL);
+}
+void left_wheel_cmd_callback(const void * msgin)
+{
+    const std_msgs__msg__Float32 *msg_received = (const std_msgs__msg__Float32 *)msgin;
+    // Publish received command as string
+    msg_string_test.data.data = "Published from left_cmd_callback";
+    msg_string_test.data.size = strlen(msg_string_test.data.data);
+    rcl_ret_t ret = rcl_publish(&pico_string_publisher, &msg_string_test, NULL);
+
+    // Set the PID setpoint for the left motor
+    pid_set_setpoint(&leftMotor.motorStats.pid, msg_received->data);
 }
 
-float calculate_velocity(int32_t current_encoder_count, int32_t previous_encoder_count, float time_interval, float pulses_per_rev, float wheel_radius) {
-    // Calculate the change in encoder counts
-    int32_t delta_count = current_encoder_count - previous_encoder_count;
+void right_wheel_cmd_callback(const void * msgin)
+{
+    const std_msgs__msg__Float32 *msg_received = (const std_msgs__msg__Float32 *)msgin;
+    // Publish received command as string
+    msg_string_test.data.data = "Published from right_cmd_callback";
+    msg_string_test.data.size = strlen(msg_string_test.data.data);
+    rcl_ret_t ret = rcl_publish(&pico_string_publisher, &msg_string_test, NULL);
 
-    // Calculate the angular displacement in radians
-    float angular_displacement = delta_count * (2.0f * M_PI / pulses_per_rev);
+    // Set the PID setpoint for the right motor
+    pid_set_setpoint(&rightMotor.motorStats.pid, msg_received->data);
+}
 
-    // Calculate angular velocity (radians per second)
-    float angular_velocity = angular_displacement / time_interval;
+void pid_state_callback(const void * msgin)
+{
+    const control_msgs__msg__PidState *msg_received = (const control_msgs__msg__PidState *)msgin;
 
-    // Convert angular velocity to linear velocity (meters per second)
-    float linear_velocity = angular_velocity * wheel_radius;
+    // Variables to store P, I, D values from the PidState message
+    double p_term = msg_received->p_term;
+    double i_term = msg_received->i_term;
+    double d_term = msg_received->d_term;
 
-    return linear_velocity;
+    // Set the PID gains using the parsed values
+    pid_set_gains(&leftMotor.motorStats.pid, p_term, i_term, d_term);
+    pid_set_gains(&rightMotor.motorStats.pid, p_term, i_term, d_term);
+
+    //mannuial for debuging
+    // leftMotor.motorStats.pid.Kp = p_term;
+    // leftMotor.motorStats.pid.Ki = i_term;
+    // leftMotor.motorStats.pid.Kd = d_term;
+
+    // rightMotor.motorStats.pid.Kp = p_term;
+    // rightMotor.motorStats.pid.Ki = i_term;
+    // rightMotor.motorStats.pid.Kd = d_term;
+
+
+    // Optionally publish a confirmation message
+    char pid_string[50];
+    sprintf(pid_string, "R PID: P=%lf, I=%lf, D=%lf", p_term, i_term, d_term);
+    
+    msg_string_test.data.data = pid_string;
+    msg_string_test.data.size = strlen(pid_string);
+    rcl_ret_t ret = rcl_publish(&pico_string_publisher, &msg_string_test, NULL);
+    print_pid_terms();
+}
+
+int main()
+{   
+    stdio_init_all(); // Initialize all configured stdio types
+
+    // Initialize motors
+    float kp = 10, ki = 1, kd = 0;
+    init_motor(&leftMotor, MOTOR1_PWM, MOTOR1_IN1, MOTOR1_IN2, MOTOR1_ENCODER, kp, ki, kd, 0);
+    init_motor(&rightMotor, MOTOR2_PWM, MOTOR2_IN1, MOTOR2_IN2, MOTOR2_ENCODER, kp, ki, kd, 0);
+    
+    // Initialize encoders
+    init_PIO_encoder(MOTOR1_ENCODER, MOTOR2_ENCODER, ENCODERA, ENCODERB);
+
+    rmw_uros_set_custom_transport(
+        true,
+        NULL,
+        pico_serial_transport_open,
+        pico_serial_transport_close,
+        pico_serial_transport_write,
+        pico_serial_transport_read
+    );
+
+    gpio_init(LED_PIN);
+    gpio_set_dir(LED_PIN, GPIO_OUT);
+
+    rcl_timer_t timer1, timer2;
+    rcl_node_t node;
+    rcl_allocator_t allocator;
+    rclc_support_t support;
+    rclc_executor_t executor;
+    rcl_subscription_t left_wheel_cmd_sub, right_wheel_cmd_sub, pid_state_sub;
+    
+    msg_string_test.data.data = "init_string_test";
+    msg_string_test.data.capacity = 50;
+    msg_string_pid.data.data = "init_string_pid";
+    msg_string_pid.data.capacity = 50;
+    msg_float_left.data = 0.0f;
+    msg_float_right.data = 0.0f;
+
+
+
+    allocator = rcl_get_default_allocator();
+
+    // Wait for agent successful ping for 2 minutes.
+    const int timeout_ms = 1000; 
+    const uint8_t attempts = 120;
+
+    rcl_ret_t ret = rmw_uros_ping_agent(timeout_ms, attempts);
+
+    if (ret != RCL_RET_OK)
+    {
+        // Unreachable agent, exiting program.
+        return ret;
+    }
+
+    rclc_support_init(&support, 0, NULL, &allocator);
+
+    rclc_node_init_default(&node, "pico_node", "", &support);
+
+    // Initialize the string publisher
+    rclc_publisher_init_default(
+        &pico_string_publisher,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
+        "pico_string_publisher");
+
+    // Initialize the float publisher for debugging
+    rclc_publisher_init_default(
+        &pico_float_publisher,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
+        "pico_float_publisher");
+
+    rclc_publisher_init_default(
+        &publisher_odomoter,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(nav_msgs,msg, Odometry),
+        "pico_odometry");
+
+
+    rclc_subscription_init_default(
+        &left_wheel_cmd_sub,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
+        "left_wheel_cmd");
+
+    rclc_subscription_init_default(
+        &right_wheel_cmd_sub,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
+        "right_wheel_cmd");
+
+    rclc_subscription_init_default(
+        &pid_state_sub,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(control_msgs, msg, PidState),
+        "pid_state_cmd");
+
+    rclc_timer_init_default(
+        &timer1,
+        &support,
+        RCL_MS_TO_NS(50),
+        timer_callback1);
+
+    rclc_timer_init_default(
+        &timer2,
+        &support,
+        RCL_MS_TO_NS(40),
+        timer_callback2);
+
+    rclc_executor_init(&executor, &support.context, 5, &allocator);
+    rclc_executor_add_timer(&executor, &timer1);
+    rclc_executor_add_timer(&executor, &timer2);
+    rclc_executor_add_subscription(&executor, &pid_state_sub, &pid_in, &pid_state_callback, ON_NEW_DATA);
+    rclc_executor_add_subscription(&executor, &left_wheel_cmd_sub, &msg_float_left, &left_wheel_cmd_callback, ON_NEW_DATA);
+    rclc_executor_add_subscription(&executor, &right_wheel_cmd_sub, &msg_float_right, &right_wheel_cmd_callback, ON_NEW_DATA);
+
+    gpio_put(LED_PIN, 1);
+
+    while (true)
+    {
+        rclc_executor_spin_some(&executor, RCL_MS_TO_NS(20));
+    }
+
+    // Clean up resources (not strictly necessary for an embedded system like Pico, but good practice)
+    rclc_executor_fini(&executor);
+    rclc_timer_fini(&timer1);
+    rclc_timer_fini(&timer2);
+    rclc_publisher_fini(&pico_string_publisher, &node);
+    rclc_publisher_fini(&pico_float_publisher, &node);
+    rclc_subscription_fini(&left_wheel_cmd_sub, &node);
+    rclc_subscription_fini(&right_wheel_cmd_sub, &node);
+    rclc_subscription_fini(&pid_state_sub, &node);
+    rcl_node_fini(&node);
+    rclc_support_fini(&support);
+
+    return 0;
 }

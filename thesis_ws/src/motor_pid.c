@@ -14,8 +14,8 @@ void pid_set_gains(PIDController* pid, double Kp, double Ki, double Kd) {
 }
 
 // Update PID controller and compute control output
-double pid_update(PIDController* pid, double input, double dt_ms) {
-    double dt = dt_ms/1000.0f;
+double pid_update(PIDController* pid, double input, double dt) {
+
     double error = pid->setpoint - input;
     pid->error = error;
     pid->integral = pid->integral + error * dt;

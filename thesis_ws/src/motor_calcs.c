@@ -54,8 +54,8 @@ void calc_stats(float time, Odometry_values *vals, int32_t ENCODER1_TICKS, int32
     // - printf("    Last angular_vel_1: %f    Last angular_vel_2: %f\n", motorStatsA->angular_velocity, motorStatsB->angular_velocity);
 
     // Calculate the current angular position (in radians) of each wheel
-    float angular_pos_1 = (float)ENCODER1_TICKS * (2.0f * M_PI / encoder_setup.PULSES_PER_REV);
-    float angular_pos_2 = (float)ENCODER2_TICKS * (2.0f * M_PI / encoder_setup.PULSES_PER_REV);
+    float angular_pos_1 = (float)ENCODER1_TICKS * (2.0f * M_PI / encoder_setup.PULSES_PER_REV_GEAR);
+    float angular_pos_2 = (float)ENCODER2_TICKS * (2.0f * M_PI / encoder_setup.PULSES_PER_REV_GEAR);
 
     // - printf("    Calculated angular_pos_1: %f    Calculated angular_pos_2: %f\n", angular_pos_1, angular_pos_2);
 

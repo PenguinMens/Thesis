@@ -59,5 +59,17 @@ void pid_set_setpoint(PIDController* pid, double setpoint);
  */
 void pid_reset(PIDController* pid);
 
+/**
+ * @brief Set the PID gains for the controller.
+ * 
+ * @param pid Pointer to the PIDController structure.
+ * @param Kp Proportional gain.
+ * @param Ki Integral gain.
+ * @param Kd Derivative gain.
+ */
+void pid_set_gains(PIDController* pid, double Kp, double Ki, double Kd);
+
+
+
 void pid_set_message(PIDController* pid, control_msgs__msg__PidState* msg);
 #endif // MOTOR_PID_H

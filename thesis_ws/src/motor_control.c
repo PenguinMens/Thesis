@@ -37,7 +37,7 @@ void set_motor_dir(float speed, Motor motor) {
     if (speed < 0.000001f && speed > -0.000001f) {
         gpio_put(motor.IN1_PIN, HIGH);  // Set input 1 of motor to HIGH
         gpio_put(motor.IN2_PIN, HIGH);  // Set input 2 of motor to HIGH
-        printf("STOP\n");
+        
     } else if (speed > 0.000001f) {
         gpio_put(motor.IN1_PIN, HIGH);  // Set input 1 of motor to HIGH
         gpio_put(motor.IN2_PIN, LOW);   // Set input 2 of motor to LOW
