@@ -2,6 +2,7 @@
 #include <math.h>           // Include math functions
 #include "pico/stdlib.h"    // Include Pico standard library functions
 #include "motor.h"
+#include "encoder.h"
 // Constants for GPIO
 #define HIGH 1
 #define LOW 0
@@ -25,7 +26,13 @@ void set_motor_dir(float speed, Motor motor);
 //      printf("LEFT MOTORO %f,%f\n", dir,pwm);
 // }
 
-// Function to control left motor
+// closed loop control based on position
+
+
+
+
+
+// Function to control  motor
 int control_motor(Motor motor, float dir, float pwm) {
     set_motor_dir(dir, motor);  // Set direction of Motor B
     pwm_set_freq_duty(motor.SLICE, motor.CHANNEL, 50000, pwm);  // Set PWM duty cycle for Motor B

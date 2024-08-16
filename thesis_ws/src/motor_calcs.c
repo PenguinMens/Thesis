@@ -5,8 +5,7 @@
 // Global variables struct for encoder initialization
 encoder_setup_t encoder_setup = {
     .PULSES_PER_REV = 12400,       // Number of encoder pulses per revolution (default: 12400)
-    .PULSES_PER_REV_GEAR = 3100,   // Number of encoder pulses per revolution with gear (default: 3100)
-    .FRAME_TIME_MS = 100,          // Frame time in milliseconds (default: 100)
+    .PULSES_PER_REV_GEAR = 3120,   // Number of encoder pulses per revolution with gear (default: 3100)      // Frame time in milliseconds (default: 100)
     .WHEEL_DIAMETER = 0.2,         // Diameter of the wheel in meters (default: 0.2)
     .WHEEL_BASE = 0.20             // Distance between wheels in meters (default: 0.20)
 };

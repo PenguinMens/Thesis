@@ -45,6 +45,7 @@
 #include <limits>
 #include <memory>
 #include <vector>
+#include <thread>
 
 #include "hardware_interface/lexical_casts.hpp"
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
@@ -85,6 +86,12 @@ hardware_interface::CallbackReturn DiffBotSystemHardware::on_init(
   auto node = std::make_shared<rclcpp::Node>("diffbot_communicator_node");
   diffbot_communicator_.initialize(node);
 
+    // Start a separate thread to spin the node
+  std::thread spin_thread([node]() {
+      rclcpp::spin(node);
+  });
+  // Detach the thread so it runs independently
+  spin_thread.detach();
   for (const hardware_interface::ComponentInfo & joint : info_.joints)
   {
     // DiffBotSystem has exactly two states and one command interface on each joint
@@ -177,7 +184,7 @@ hardware_interface::CallbackReturn DiffBotSystemHardware::on_activate(
   // This might involve checking that the node is ready to publish/subscribe
   if (!diffbot_communicator_.isReady()) {
     RCLCPP_FATAL(rclcpp::get_logger("DiffBotSystemHardware"), "Micro-ROS node is not ready!");
-    return hardware_interface::CallbackReturn::ERROR;
+    // return hardware_interface::CallbackReturn::ERROR;
   }
 
   // Reset hardware states to initial conditions
@@ -212,6 +219,7 @@ hardware_interface::return_type DiffBotSystemHardware::read(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & period)
 {
     // Pretty sure since were using subsribers the 
+
   int32_t pulse_count_left = diffbot_communicator_.getLeftWheelEncoder();
   int32_t pulse_count_right = diffbot_communicator_.getRightWheelEncoder();
   wheel_l_.enc = pulse_count_left;
@@ -226,7 +234,9 @@ hardware_interface::return_type DiffBotSystemHardware::read(
   wheel_r_.pos = wheel_r_.calc_enc_angle();
   wheel_r_.vel = (wheel_r_.pos - pos_prev) / delta_seconds;
 
-  
+    // RCLCPP_INFO(rclcpp::get_logger("DiffBotSystemHardware"), 
+    //           "Read wheel data: Left Encoder = %d, Right Encoder = %d, Left Pos = %f, Right Pos = %f, Left Vel = %f, Right Vel = %f",
+    //           pulse_count_left, pulse_count_right, wheel_l_.pos, wheel_r_.pos, wheel_l_.vel, wheel_r_.vel);
  // @todo
 
   return hardware_interface::return_type::OK;
@@ -235,6 +245,8 @@ hardware_interface::return_type DiffBotSystemHardware::read(
 hardware_interface::return_type DiffBotSystemHardware::write(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
+
+  RCLCPP_INFO(rclcpp::get_logger("DiffBotSystemHardware"), "Writing wheel commands: left = %f, right = %f", wheel_l_.cmd, wheel_r_.cmd);
 
   // Send the commands to the wheels
   diffbot_communicator_.sendWheelCommands(wheel_l_.cmd, wheel_r_.cmd);

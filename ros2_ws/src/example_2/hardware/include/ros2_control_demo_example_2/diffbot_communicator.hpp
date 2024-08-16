@@ -19,17 +19,23 @@ public:
     left_wheel_publisher_ = node->create_publisher<std_msgs::msg::Float32>("left_wheel_cmd", 10);
     right_wheel_publisher_ = node->create_publisher<std_msgs::msg::Float32>("right_wheel_cmd", 10);
 
-    left_encoder_subscriber_ = node->create_subscription<std_msgs::msg::Int32>(
-      "left_wheel_encoder", 10, [this](const std_msgs::msg::Int32::SharedPtr msg) {
-        left_wheel_encoder_ = msg->data;
-        received_left_encoder_ = true;
-      });
+  RCLCPP_INFO(rclcpp::get_logger("DiffBotCommunicator"), "Initializing DiffBotCommunicator");
 
-    right_encoder_subscriber_ = node->create_subscription<std_msgs::msg::Int32>(
-      "right_wheel_encoder", 10, [this](const std_msgs::msg::Int32::SharedPtr msg) {
-        right_wheel_encoder_ = msg->data;
-        received_right_encoder_ = true;
-      });
+  left_encoder_subscriber_ = node->create_subscription<std_msgs::msg::Int32>(
+    "left_wheel_encoder", 10, [this](const std_msgs::msg::Int32::SharedPtr msg) {
+      left_wheel_encoder_ = msg->data;
+      received_left_encoder_ = true;
+      // RCLCPP_INFO(rclcpp::get_logger("DiffBotCommunicator"), "Left wheel encoder updated: %d", left_wheel_encoder_);
+    });
+
+  right_encoder_subscriber_ = node->create_subscription<std_msgs::msg::Int32>(
+    "right_wheel_encoder", 10, [this](const std_msgs::msg::Int32::SharedPtr msg) {
+      right_wheel_encoder_ = msg->data;
+      received_right_encoder_ = true;
+      // RCLCPP_INFO(rclcpp::get_logger("DiffBotCommunicator"), "Right wheel encoder updated: %d", right_wheel_encoder_);
+    });
+
+  RCLCPP_INFO(rclcpp::get_logger("DiffBotCommunicator"), "Subscriptions are set up");
   }
 
 
