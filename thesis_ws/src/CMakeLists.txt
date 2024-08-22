@@ -12,6 +12,7 @@ add_executable(${NAME}
     motor_pid.c
     motor_calcs.c
     motor.c
+    icm42688.c
         )
 
 # Pull in our pico_stdlib which pulls in commonly used features
