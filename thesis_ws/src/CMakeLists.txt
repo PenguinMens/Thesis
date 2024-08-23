@@ -27,7 +27,7 @@ target_link_libraries(${NAME}
 pico_generate_pio_header(${NAME}  ${CMAKE_CURRENT_LIST_DIR}/quadrature_encoder.pio)
 
 target_include_directories(${NAME} PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}
+    ${CMAKE_CURRENT_LIST_DIR}/../include
      )
      
 target_compile_definitions(${NAME} PRIVATE

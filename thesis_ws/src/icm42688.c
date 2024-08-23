@@ -1,86 +1,124 @@
 #include "icm42688.h"
 #include "pico/stdlib.h"
-#include "hardware/i2c.h"
-#include "pico/binary_info.h"
-
-#define ICM42688_I2C_ADDR 0x68
 
 
-void i2c_init_icm42688() {
-    printf("Initializing I2C...\n");
-    i2c_init(i2c_default, 100 * 1000);  // Initialize I2C at 100kHz
 
-    gpio_set_function(PICO_DEFAULT_I2C_SDA_PIN, GPIO_FUNC_I2C);
-    gpio_set_function(PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C);
+int reg_write(i2c_inst_t *i2c, 
+              const uint addr, 
+              const uint8_t reg, 
+              uint8_t *buf,
+              const uint8_t nbytes) {
 
-    gpio_pull_up(PICO_DEFAULT_I2C_SDA_PIN);
-    gpio_pull_up(PICO_DEFAULT_I2C_SCL_PIN);
+    // Check to make sure caller is sending 1 or more bytes
+    if (nbytes < 1) {
+        return -1;  // Return an error if no bytes to send
+    }
 
-    bi_decl(bi_2pins_with_func(PICO_DEFAULT_I2C_SDA_PIN, PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C));
+    uint8_t msg[nbytes + 1];
 
-    printf("I2C initialized.\n");
+    // Append register address to front of data packet
+    msg[0] = reg;
+    for (int i = 0; i < nbytes; i++) {
+        msg[i + 1] = buf[i];
+    }
+
+    // Write data to register(s) over I2C and check for success
+    int result = i2c_write_blocking(i2c, addr, msg, (nbytes + 1), false);
+    if (result < 0) {
+        printf("I2C write failed with error code: %d\n", result);
+        return result;  // Return the error code if write failed
+    }
+
+    return result;  // Return the number of bytes written
 }
 
-void icm42688_write_register(uint8_t reg, uint8_t value) {
-    uint8_t data[2] = {reg, value};
-    int result = i2c_write_blocking(i2c_default, ICM42688_I2C_ADDR, data, 2, false);
-    if (result < 0) {
-        printf("Failed to write to register 0x%02X\n", reg);
-    } else {
-        printf("Wrote 0x%02X to register 0x%02X\n", value, reg);
+// Read byte(s) from specified register. If nbytes > 1, read from consecutive
+// registers.
+int reg_read(  i2c_inst_t *i2c,
+                const uint addr,
+                const uint8_t reg,
+                uint8_t *buf,
+                const uint8_t nbytes) {
+
+    int num_bytes_read = 0;
+
+    // Check to make sure caller is asking for 1 or more bytes
+    if (nbytes < 1) {
+        return 0;
     }
+
+    // Read data from register(s) over I2C
+    i2c_write_blocking(i2c, addr, &reg, 1, true);
+    num_bytes_read = i2c_read_blocking(i2c, addr, buf, nbytes, false);
+
+    return num_bytes_read;
 }
 
-uint8_t icm42688_read_register(uint8_t reg) {
-    uint8_t value;
-    int result = i2c_write_blocking(i2c_default, ICM42688_I2C_ADDR, &reg, 1, true);
-    if (result < 0) {
-        printf("Failed to write register address 0x%02X\n", reg);
-        return 0xFF;  // Return an error value
-    }
+void icm42688_reset(i2c_inst_t *i2c) {
+    uint8_t buf[] = {ICM42688_SIGNAL_PATH_RESET, 0x01};  // Reset the device
+    reg_write(i2c, ICM42688_I2C_L_ADDR, buf[0], &buf[1], 1);
+    sleep_ms(100);  // Wait for reset to complete
 
-    result = i2c_read_blocking(i2c_default, ICM42688_I2C_ADDR, &value, 1, false);
-    if (result < 0) {
-        printf("Failed to read from register 0x%02X\n", reg);
-        return 0xFF;  // Return an error value
-    }
+    // Set PWR_MGMT0 to enable accelerometer and gyroscope in LN mode
+    buf[0] = ICM42688_PWR_MGMT0;
+    buf[1] = 0x0F;  // Set GYRO_MODE and ACCEL_MODE to LN mode, enable temp sensor
+    reg_write(i2c, ICM42688_I2C_L_ADDR, buf[0], &buf[1], 1);
 
-    printf("Read 0x%02X from register 0x%02X\n", value, reg);
-    return value;
+    // Additional sensor configuration can follow here...
 }
 
-void icm42688_read_registers(uint8_t reg, uint8_t* buf, uint8_t len) {
-    int result = i2c_write_blocking(i2c_default, ICM42688_I2C_ADDR, &reg, 1, true);
-    if (result < 0) {
-        printf("Failed to write start register address 0x%02X\n", reg);
-        return;
-    }
 
-    result = i2c_read_blocking(i2c_default, ICM42688_I2C_ADDR, buf, len, false);
-    if (result < 0) {
-        printf("Failed to read %d bytes from register 0x%02X\n", len, reg);
-    } else {
-        printf("Read %d bytes starting from register 0x%02X\n", len, reg);
-    }
-}
 
-void icm42688_init() {
+
+void icm42688_init(i2c_inst_t *i2c) {
     printf("Initializing ICM-42688P...\n");
 
     // Reset the device
-    icm42688_write_register(0x4B, 0x80);  // Assuming 0x4B is the reset register
+    printf("Attempting to reset the device...\n");
+    uint8_t buf[] = {ICM42688_SIGNAL_PATH_RESET, 0x80};
+    int result = reg_write(i2c, ICM42688_I2C_L_ADDR, buf[0], &buf[1], 1);
+    
+    if (result < 0) {
+        printf("Failed to reset the device. Error code: %d\n", result);
+        return; // Early return on error
+    } else {
+        printf("Device reset successful.\n");
+    }
+
     sleep_ms(100);  // Wait for reset
 
-    // Configure accelerometer and gyroscope
-    icm42688_write_register(0x1B, 0x18);  // Set gyroscope full scale range to ±2000dps
-    icm42688_write_register(0x1C, 0x10);  // Set accelerometer full scale range to ±8g
+    // Configure gyroscope
+    printf("Configuring gyroscope: Full scale ±1000dps, ODR 1kHz...\n");
+    uint8_t gyro_config = 0b00000110;
+    result = reg_write(i2c, ICM42688_I2C_L_ADDR, ICM42688_GYRO_CONFIG0, &gyro_config, 1);
+
+    if (result < 0) {
+        printf("Failed to configure gyroscope. Error code: %d\n", result);
+        return; // Early return on error
+    } else {
+        printf("Gyroscope configured successfully.\n");
+    }
+
+    // Configure accelerometer
+    printf("Configuring accelerometer: Full scale ±4g, ODR 1kHz...\n");
+    uint8_t accel_config = 0b01000110;
+    result = reg_write(i2c, ICM42688_I2C_L_ADDR, ICM42688_ACCEL_CONFIG0, &accel_config, 1);
+
+    if (result < 0) {
+        printf("Failed to configure accelerometer. Error code: %d\n", result);
+        return; // Early return on error
+    } else {
+        printf("Accelerometer configured successfully.\n");
+    }
 
     printf("ICM-42688P initialized.\n");
 }
 
-void icm42688_read_accel(float *ax, float *ay, float *az) {
+
+void icm42688_read_accel(i2c_inst_t *i2c,float *ax, float *ay, float *az) {
     uint8_t rawData[6];
-    icm42688_read_registers(0x3B1, rawData, 6);  // Assuming 0x3B is the accel data start register
+    // read 6 bytes from the accelerometer x0, x1, y0, y1, z0, z1
+    reg_read(i2c, ICM42688_I2C_L_ADDR, ICM42688_ACCEL_DATA_X0, rawData, 6);
 
     *ax = (float)((int16_t)(rawData[0] << 8 | rawData[1])) / 4096.0;
     *ay = (float)((int16_t)(rawData[2] << 8 | rawData[3])) / 4096.0;
@@ -89,9 +127,11 @@ void icm42688_read_accel(float *ax, float *ay, float *az) {
     printf("Accel: ax=%.2f, ay=%.2f, az=%.2f\n", *ax, *ay, *az);
 }
 
-void icm42688_read_gyro(float *gx, float *gy, float *gz) {
+void icm42688_read_gyro(i2c_inst_t *i2c, float *gx, float *gy, float *gz) {
     uint8_t rawData[6];
-    icm42688_read_registers(0x43, rawData, 6);  // Assuming 0x43 is the gyro data start register
+    // read 6 bytes from the gyroscope x0, x1, y0, y1, z0, z1
+    reg_read(i2c, ICM42688_I2C_L_ADDR, ICM42688_GYRO_DATA_X0, rawData, 6);
+    
 
     *gx = (float)((int16_t)(rawData[0] << 8 | rawData[1])) / 16.4;
     *gy = (float)((int16_t)(rawData[2] << 8 | rawData[3])) / 16.4;
