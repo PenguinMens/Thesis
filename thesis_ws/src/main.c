@@ -8,8 +8,8 @@
 #define WHO_AM_I_EXPECTED 0x47
 
 #define PWR_MGMT0_REG 0x4E
-#define ACCEL_CONFIG0_REG 0x14
-#define GYRO_CONFIG0_REG 0x11
+#define ACCEL_CONFIG0_REG 0x50
+#define GYRO_CONFIG0_REG 0x4F
 #define TEMP_DATA1_REG 0x1D
 #define ACCEL_DATA_REG 0x1F
 #define GYRO_DATA_REG 0x25
@@ -19,8 +19,19 @@
 #define ACCEL_ODR    0x07  // 1.6 kHz
 #define GYRO_ODR     0x07  // 1.6 kHz
 
+#define ACCEL_SCALE (16.0 / 32768.0) // Scaling factor for ±16g
+#define GYRO_SCALE  (2000.0 / 32768.0) // Scaling factor for ±2000 dps
+
 // Default I2C instance
 i2c_inst_t *i2c = i2c_default;
+
+static uint8_t icm42688_read_register(uint8_t reg) {
+    uint8_t val;
+    i2c_write_blocking(i2c, ICM42688_ADDR, &reg, 1, true);
+    i2c_read_blocking(i2c, ICM42688_ADDR, &val, 1, false);
+    return val;
+}
+
 
 static void icm42688_reset() {
     uint8_t buf[] = {PWR_MGMT0_REG, 0x01};  // Reset the device
@@ -59,10 +70,17 @@ static void icm42688_configure() {
         printf("Failed to write to GYRO_CONFIG0_REG\n");
     }
     else{
-        printf("Wrote to ACCEL_CONFIG0_REG\n");
+        printf("Wrote to GYRO_CONFIG0_REG\n");
     }
     sleep_ms(10);  // Small delay to ensure register write completion
+
+    // Verify writes by reading back the registers
+    uint8_t accel_config = icm42688_read_register(ACCEL_CONFIG0_REG);
+    uint8_t gyro_config = icm42688_read_register(GYRO_CONFIG0_REG);
+    printf("Read ACCEL_CONFIG0: 0x%02X\n", accel_config);
+    printf("Read GYRO_CONFIG0: 0x%02X\n", gyro_config);
 }
+
 
 static uint8_t icm42688_who_am_i() {
     uint8_t reg = WHO_AM_I_REG;
@@ -72,8 +90,9 @@ static uint8_t icm42688_who_am_i() {
     return id;
 }
 
-static void icm42688_read_raw(int16_t accel[3], int16_t gyro[3], int16_t *temp) {
+static void icm42688_read_raw(float accel[3], float gyro[3], float *temp) {
     uint8_t buffer[6];
+    int16_t raw_data;
 
     // Read accelerometer data
     uint8_t val = ACCEL_DATA_REG;
@@ -81,7 +100,8 @@ static void icm42688_read_raw(int16_t accel[3], int16_t gyro[3], int16_t *temp) 
     i2c_read_blocking(i2c, ICM42688_ADDR, buffer, 6, false);
 
     for (int i = 0; i < 3; i++) {
-        accel[i] = (buffer[i * 2] << 8 | buffer[(i * 2) + 1]);
+        raw_data = (buffer[i * 2] << 8 | buffer[(i * 2) + 1]);
+        accel[i] = raw_data * ACCEL_SCALE; // Convert to g
     }
 
     // Read gyroscope data
@@ -90,7 +110,8 @@ static void icm42688_read_raw(int16_t accel[3], int16_t gyro[3], int16_t *temp) 
     i2c_read_blocking(i2c, ICM42688_ADDR, buffer, 6, false);
 
     for (int i = 0; i < 3; i++) {
-        gyro[i] = (buffer[i * 2] << 8 | buffer[(i * 2) + 1]);
+        raw_data = (buffer[i * 2] << 8 | buffer[(i * 2) + 1]);
+        gyro[i] = raw_data * GYRO_SCALE; // Convert to degrees per second
     }
 
     // Read temperature data
@@ -98,27 +119,23 @@ static void icm42688_read_raw(int16_t accel[3], int16_t gyro[3], int16_t *temp) 
     i2c_write_blocking(i2c, ICM42688_ADDR, &val, 1, true);
     i2c_read_blocking(i2c, ICM42688_ADDR, buffer, 2, false);
 
-    *temp = buffer[0] << 8 | buffer[1];
+    raw_data = buffer[0] << 8 | buffer[1];
+    *temp = (raw_data / 132.48) + 25.0; // Convert to Celsius
+
 }
 
-static uint8_t icm42688_read_register(uint8_t reg) {
-    uint8_t val;
-    i2c_write_blocking(i2c, ICM42688_ADDR, &reg, 1, true);
-    i2c_read_blocking(i2c, ICM42688_ADDR, &val, 1, false);
-    return val;
-}
 
 int main() {
     stdio_init_all();
-
+    sleep_ms(1000);
     i2c_init(i2c, 400 * 1000);
     gpio_set_function(PICO_DEFAULT_I2C_SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C);
     gpio_pull_up(PICO_DEFAULT_I2C_SDA_PIN);
     gpio_pull_up(PICO_DEFAULT_I2C_SCL_PIN);
-
+        sleep_ms(2000);
     printf("Initializing ICM42688...\n");
-
+        sleep_ms(4000);
     icm42688_reset();
     icm42688_configure();
 
@@ -133,12 +150,9 @@ int main() {
 
     while (1) {
             // Read back configuration registers
-        icm42688_configure();
-        uint8_t accel_config = icm42688_read_register(ACCEL_CONFIG0_REG);
-        uint8_t gyro_config = icm42688_read_register(GYRO_CONFIG0_REG);
-        printf("ACCEL_CONFIG0: 0x%02X\n", accel_config);
-        printf("GYRO_CONFIG0: 0x%02X\n", gyro_config);
-
+        // icm42688_configure();
+        printf("WHO AM I %d\n", icm42688_who_am_i());
+     
         icm42688_read_raw(accel, gyro, &temp);
 
         printf("Acc. X = %d, Y = %d, Z = %d\n", accel[0], accel[1], accel[2]);
