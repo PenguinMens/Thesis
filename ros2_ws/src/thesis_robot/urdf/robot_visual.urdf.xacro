@@ -29,6 +29,12 @@
 
     </link>
 
+    <joint name="joint_name" type="fixed">
+        <parent link="parent_link"/>
+        <child link="child_link"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>    
+    </joint>
+
 
     <!-- CHASSIS LINK -->
 

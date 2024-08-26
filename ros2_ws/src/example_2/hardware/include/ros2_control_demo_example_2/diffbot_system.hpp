@@ -80,6 +80,9 @@ private:
   Config cfg_;
   Wheel wheel_l_;
   Wheel wheel_r_;
+  double imu_orientation_[3];  // For storing quaternion (x, y, z, w)
+  double imu_angular_velocity_[3];  // For storing angular velocity (x, y, z)
+  double imu_linear_acceleration_[3];  // For storing linear acceleration (x, y, z)
 
 };
 

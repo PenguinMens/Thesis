@@ -148,6 +148,7 @@ std::vector<hardware_interface::StateInterface> DiffBotSystemHardware::export_st
 {
   std::vector<hardware_interface::StateInterface> state_interfaces;
 
+  // Wheel state interfaces
   state_interfaces.emplace_back(hardware_interface::StateInterface(
     wheel_l_.name, hardware_interface::HW_IF_POSITION, &wheel_l_.pos));
   state_interfaces.emplace_back(hardware_interface::StateInterface(
@@ -157,6 +158,14 @@ std::vector<hardware_interface::StateInterface> DiffBotSystemHardware::export_st
     wheel_r_.name, hardware_interface::HW_IF_POSITION, &wheel_r_.pos));
   state_interfaces.emplace_back(hardware_interface::StateInterface(
     wheel_r_.name, hardware_interface::HW_IF_VELOCITY, &wheel_r_.vel));
+
+  // IMU state interfaces
+  state_interfaces.emplace_back(hardware_interface::StateInterface(
+    "imu_sensor", hardware_interface::HW_IF_POSITION, imu_orientation_));
+  state_interfaces.emplace_back(hardware_interface::StateInterface(
+    "imu_sensor", hardware_interface::HW_IF_VELOCITY, imu_angular_velocity_));
+  state_interfaces.emplace_back(hardware_interface::StateInterface(
+    "imu_sensor", hardware_interface::HW_IF_ACCELERATION, imu_linear_acceleration_));
 
   return state_interfaces;
 }
@@ -233,6 +242,9 @@ hardware_interface::return_type DiffBotSystemHardware::read(
   pos_prev = wheel_r_.pos;
   wheel_r_.pos = wheel_r_.calc_enc_angle();
   wheel_r_.vel = (wheel_r_.pos - pos_prev) / delta_seconds;
+    
+  diffbot_communicator_.getIMUData(imu_orientation_, imu_angular_velocity_, imu_linear_acceleration_);
+
 
     // RCLCPP_INFO(rclcpp::get_logger("DiffBotSystemHardware"), 
     //           "Read wheel data: Left Encoder = %d, Right Encoder = %d, Left Pos = %f, Right Pos = %f, Left Vel = %f, Right Vel = %f",
@@ -246,7 +258,7 @@ hardware_interface::return_type DiffBotSystemHardware::write(
   const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/)
 {
 
-  RCLCPP_INFO(rclcpp::get_logger("DiffBotSystemHardware"), "Writing wheel commands: left = %f, right = %f", wheel_l_.cmd, wheel_r_.cmd);
+//   RCLCPP_INFO(rclcpp::get_logger("DiffBotSystemHardware"), "Writing wheel commands: left = %f, right = %f", wheel_l_.cmd, wheel_r_.cmd);
 
   // Send the commands to the wheels
   diffbot_communicator_.sendWheelCommands(wheel_l_.cmd, wheel_r_.cmd);
