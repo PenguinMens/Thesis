@@ -68,10 +68,27 @@ void icm42688_reset(i2c_inst_t *i2c) {
 }
 
 
+static uint8_t icm42688_who_am_i(i2c_inst_t *i2c) {
+    uint8_t reg = ICM42688_WHO_AM_I;
+    uint8_t id;
+    i2c_write_blocking(i2c, ICM42688_I2C_L_ADDR, &reg, 1, true);
+    i2c_read_blocking(i2c, ICM42688_I2C_L_ADDR, &id, 1, false);
+    return id;
+}
 
 
 void icm42688_init(i2c_inst_t *i2c) {
     printf("Initializing ICM-42688P...\n");
+
+    // WHO AM I
+    uint8_t id = icm42688_who_am_i(i2c);
+    if (id != ICM42688_ID) {
+        printf("WHO_AM_I failed. Expected 0x49, got 0x%02X\n", id);
+        return ; // Early return on error
+    } else {
+        printf("WHO_AM_I successful. Device ID: 0x%02X\n", id);
+    }
+
 
     // Reset the device
     printf("Attempting to reset the device...\n");
@@ -111,31 +128,37 @@ void icm42688_init(i2c_inst_t *i2c) {
         printf("Accelerometer configured successfully.\n");
     }
 
+
     printf("ICM-42688P initialized.\n");
 }
 
 
-void icm42688_read_accel(i2c_inst_t *i2c,float *ax, float *ay, float *az) {
+void icm42688_read_accel(i2c_inst_t *i2c, float *ax, float *ay, float *az) {
     uint8_t rawData[6];
-    // read 6 bytes from the accelerometer x0, x1, y0, y1, z0, z1
-    reg_read(i2c, ICM42688_I2C_L_ADDR, ICM42688_ACCEL_DATA_X0, rawData, 6);
+    // Read 6 bytes from the accelerometer x0, x1, y0, y1, z0, z1
+    reg_read(i2c, ICM42688_I2C_L_ADDR, ICM42688_ACCEL_DATA_X1, rawData, 6);
 
-    *ax = (float)((int16_t)(rawData[0] << 8 | rawData[1])) / 4096.0;
-    *ay = (float)((int16_t)(rawData[2] << 8 | rawData[3])) / 4096.0;
-    *az = (float)((int16_t)(rawData[4] << 8 | rawData[5])) / 4096.0;
+    // Scaling factor based on ±4g full-scale range
+    float accelScale = 4.0f / 32768.0f;
 
-    printf("Accel: ax=%.2f, ay=%.2f, az=%.2f\n", *ax, *ay, *az);
+    *ax = (float)((int16_t)(rawData[0] << 8 | rawData[1])) * accelScale;
+    *ay = (float)((int16_t)(rawData[2] << 8 | rawData[3])) * accelScale;
+    *az = (float)((int16_t)(rawData[4] << 8 | rawData[5])) * accelScale;
+
+    // printf("Accel: ax=%.2f, ay=%.2f, az=%.2f\n", *ax, *ay, *az);
 }
 
 void icm42688_read_gyro(i2c_inst_t *i2c, float *gx, float *gy, float *gz) {
     uint8_t rawData[6];
-    // read 6 bytes from the gyroscope x0, x1, y0, y1, z0, z1
-    reg_read(i2c, ICM42688_I2C_L_ADDR, ICM42688_GYRO_DATA_X0, rawData, 6);
-    
+    // Read 6 bytes from the gyroscope x0, x1, y0, y1, z0, z1
+    reg_read(i2c, ICM42688_I2C_L_ADDR, ICM42688_GYRO_DATA_X1, rawData, 6);
 
-    *gx = (float)((int16_t)(rawData[0] << 8 | rawData[1])) / 16.4;
-    *gy = (float)((int16_t)(rawData[2] << 8 | rawData[3])) / 16.4;
-    *gz = (float)((int16_t)(rawData[4] << 8 | rawData[5])) / 16.4;
+    // Scaling factor based on ±2000 dps full-scale range
+    float gyroScale = 2000.0f / 32768.0f;
 
-    printf("Gyro: gx=%.2f, gy=%.2f, gz=%.2f\n", *gx, *gy, *gz);
+    *gx = (float)((int16_t)(rawData[0] << 8 | rawData[1])) * gyroScale;
+    *gy = (float)((int16_t)(rawData[2] << 8 | rawData[3])) * gyroScale;
+    *gz = (float)((int16_t)(rawData[4] << 8 | rawData[5])) * gyroScale;
+
+    // printf("Gyro: gx=%.2f, gy=%.2f, gz=%.2f\n", *gx, *gy, *gz);
 }

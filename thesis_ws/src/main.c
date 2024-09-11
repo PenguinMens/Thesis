@@ -181,10 +181,19 @@ void pid_state_callback(const void *msgin)
 int main()
 {
     stdio_init_all(); // Initialize all configured stdio types
+
+
     sleep_ms(2000);
     i2c_init(i2c_default, 100 * 1000);
+    gpio_set_function(PICO_DEFAULT_I2C_SDA_PIN, GPIO_FUNC_I2C);
+    gpio_set_function(PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C);
+    gpio_pull_up(PICO_DEFAULT_I2C_SDA_PIN);
+    gpio_pull_up(PICO_DEFAULT_I2C_SCL_PIN);
+    // Make the I2C pins available to picotool
+    bi_decl(bi_2pins_with_func(PICO_DEFAULT_I2C_SDA_PIN, PICO_DEFAULT_I2C_SCL_PIN, GPIO_FUNC_I2C));
+    icm42688_init(i2c_default);
     icm42688_reset(i2c_default);
-    // icm42688_init(i2c_default);
+
 
     
     float ax = 0, ay =0 , az = 0 , gx= 0 , gy= 0 , gz=  0;
@@ -345,8 +354,8 @@ int main()
         #if ROSMODE
             rclc_executor_spin_some(&executor, RCL_MS_TO_NS(20));
         #else
-            //  icm42688_read_accel(i2c_default, &ax, &ay, &az);
-            // icm42688_read_gyro(i2c_default, &gx, &gy, &gz);
+            icm42688_read_accel(i2c_default, &ax, &ay, &az);
+            icm42688_read_gyro(i2c_default, &gx, &gy, &gz);
             printf("Accel: ax=%.2f ay=%.2f az=%.2f\n", ax, ay, az);
             printf("Gyro: gx=%.2f gy=%.2f gz=%.2f\n", gx, gy, gz);
             sleep_ms(500);

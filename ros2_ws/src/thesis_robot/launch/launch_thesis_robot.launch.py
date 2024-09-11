@@ -36,7 +36,7 @@ def generate_launch_description():
             package="twist_mux",
             executable="twist_mux",
             parameters=[twist_mux_params, {'use_sim_time': True}],
-            remappings=[('/cmd_vel_out','/diff_cont/cmd_vel_unstamped')]
+            remappings=[('/cmd_vel_out','/diffbot_base_controller/cmd_vel_unstamped')]
         )
 
     gazebo_params_file = os.path.join(get_package_share_directory(package_name),'config','gazebo_params.yaml')
