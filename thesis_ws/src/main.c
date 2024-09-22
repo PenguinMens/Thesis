@@ -10,9 +10,11 @@
 #include <std_msgs/msg/string.h>
 #include <control_msgs/msg/pid_state.h>
 #include <nav_msgs/msg/odometry.h>
+#include <sensor_msgs/msg/imu.h>
 
 // Pico SDK
 #include "pico/stdlib.h"
+
 #include "pico_uart_transports.h"
 
 // Custom motor control includes
@@ -22,15 +24,18 @@
 #include "motor_calcs.h"
 #include "icm42688.h"
 #define PWM_MAX 50.0f
-#define ROSMODE 0
+#define ROSMODE 1
+#include "tusb.h"  // TinyUSB header for USB CDC support
+const int reverse_direction = -1;
 const uint LED_PIN = 25;
 
-rcl_publisher_t pico_string_publisher, pico_float_publisher, publisher_odometer, pico_int_publisher, left_encoder, right_encoder;
+rcl_publisher_t pico_string_publisher, pico_float_publisher, publisher_odometer, pico_int_publisher, left_encoder, right_encoder, imu_publisher;
 std_msgs__msg__String msg_string_pid, msg_string_test;
 std_msgs__msg__Float32 msg_float_left, msg_float_right, float_test;
 std_msgs__msg__Int32 msg_int_test, left_encoder_msg, right_encoder_msg;
 control_msgs__msg__PidState pid_msg, pid_in;
 nav_msgs__msg__Odometry odo_msg;
+sensor_msgs__msg__Imu msg_imu;
 Motor leftMotor, rightMotor;
 Odometry_values odo_vals;
 const uint ENCODERA = 0;
@@ -52,8 +57,8 @@ void publish_odo()
     odo_msg.pose.pose.position.y = odo_vals.y; // y position
     odo_msg.pose.pose.position.z = 0.0;        // z position
     // set the orientation
-    odo_msg.pose.pose.orientation.x = 0.0; // x orientation
-    odo_msg.pose.pose.orientation.y = 0.0; // y orientation
+    odo_msg.pose.pose.orientation.x =  leftMotor.motorStats.pid.previous_error; // x orientation
+    odo_msg.pose.pose.orientation.y = leftMotor.motorStats.pid.error; // y orientation
     odo_msg.pose.pose.orientation.z = 0;
     // odo_msg.pose.pose.orientation.w = 0.0; // w orientation
     // set the linear velocity
@@ -84,43 +89,23 @@ void motor_iteration(double dt)
     {
         pwmB = PWM_MAX;
     }
-
-    control_motor(rightMotor, outputB, pwmB);
-    control_motor(leftMotor, outputA, pwmA);
+    if (leftMotor.motorStats.pid.setpoint == 0) {
+        leftMotor.motorStats.pid.integral = 0;
+        outputA = 0;        
+        
+    }
+    if (rightMotor.motorStats.pid.setpoint == 0) {
+        rightMotor.motorStats.pid.integral = 0;
+        outputB = 0;
+    }
+    control_motor(rightMotor, -outputB, pwmB);
+    control_motor(leftMotor, -outputA, pwmA);
 
     rightMotor.motorStats.PWM = outputB;
     leftMotor.motorStats.PWM = outputA;
 }
 
-// Timer callback functions for encoder reading and motor calcs
 
-void timer_callback1(rcl_timer_t *timer, int64_t last_call_time)
-{
-    float dt = last_call_time / 1000000000.0f; // ns to s
-    int left_encoder_count = get_encoder_count_A();
-    int right_encoder_count = get_encoder_count_B();
-    left_encoder_msg.data = left_encoder_count;
-    right_encoder_msg.data = right_encoder_count;
-
-    calc_stats(dt, &odo_vals, left_encoder_count, right_encoder_count, &leftMotor.motorStats, &rightMotor.motorStats);
-
-    rcl_publish(&left_encoder, &left_encoder_msg, NULL);
-    rcl_publish(&right_encoder, &right_encoder_msg, NULL);
-    publish_odo();
-}
-
-void timer_callback2(rcl_timer_t *timer, int64_t last_call_time)
-{
-    // Publish the PID Kp value for debugging (if necessary)
-    float dt = last_call_time / 1000000000.0f;
-    float_test.data = dt;
-    rcl_publish(&pico_float_publisher, &float_test, NULL);
-    motor_iteration(dt);
-
-    // Publish an example integer value (e.g., motor encoder count)
-    msg_int_test.data = get_encoder_count_A(); // Or any other relevant integer value
-    rcl_publish(&pico_int_publisher, &msg_int_test, NULL);
-}
 
 void print_pid_terms()
 {
@@ -140,7 +125,8 @@ void left_wheel_cmd_callback(const void *msgin)
     rcl_ret_t ret = rcl_publish(&pico_string_publisher, &msg_string_test, NULL);
 
     // Set the PID setpoint for the left motor
-    pid_set_setpoint(&leftMotor.motorStats.pid, msg_received->data);
+    // Negative value for reverse direction
+    pid_set_setpoint(&leftMotor.motorStats.pid, -msg_received->data  );
 }
 
 void right_wheel_cmd_callback(const void *msgin)
@@ -152,7 +138,7 @@ void right_wheel_cmd_callback(const void *msgin)
     rcl_ret_t ret = rcl_publish(&pico_string_publisher, &msg_string_test, NULL);
 
     // Set the PID setpoint for the right motor
-    pid_set_setpoint(&rightMotor.motorStats.pid, msg_received->data);
+    pid_set_setpoint(&rightMotor.motorStats.pid, -msg_received->data ); 
 }
 
 void pid_state_callback(const void *msgin)
@@ -178,6 +164,58 @@ void pid_state_callback(const void *msgin)
     print_pid_terms();
 }
 
+void imu_publish()
+{
+
+    ;
+    float ax = 0, ay =0 , az = 0 , gx= 0 , gy= 0 , gz=  0;
+    icm42688_read_accel(i2c_default, &ax, &ay, &az);
+    icm42688_read_gyro_corrected(i2c_default, &gx, &gy, &gz);
+    
+ 
+    
+    uint64_t curr_time = time_us_64();
+    msg_imu.header.frame_id.data = "imu";
+    msg_imu.header.stamp.sec = (int32_t)(curr_time / 1000000);
+    msg_imu.header.stamp.nanosec = (int32_t)(curr_time % 1000000) * 1000;
+    msg_imu.linear_acceleration.x = ax;
+    msg_imu.linear_acceleration.y = ay;
+    msg_imu.linear_acceleration.z = az;
+    msg_imu.angular_velocity.x = gx;
+    msg_imu.angular_velocity.y = gy;
+    msg_imu.angular_velocity.z = gz;
+    rcl_publish(&imu_publisher, &msg_imu, NULL);
+}
+// Timer callback functions for encoder reading and motor calcs
+
+void timer_callback1(rcl_timer_t *timer, int64_t last_call_time)
+{
+    float dt = last_call_time / 1000000000.0f; // ns to s
+    int left_encoder_count = get_encoder_count_A() * reverse_direction;
+    int right_encoder_count = get_encoder_count_B() * reverse_direction;
+    left_encoder_msg.data = left_encoder_count;
+    right_encoder_msg.data = right_encoder_count;
+
+    calc_stats(dt, &odo_vals, left_encoder_count, right_encoder_count, &leftMotor.motorStats, &rightMotor.motorStats);
+
+    rcl_publish(&left_encoder, &left_encoder_msg, NULL);
+    rcl_publish(&right_encoder, &right_encoder_msg, NULL);
+    imu_publish();
+    publish_odo();
+}
+
+void timer_callback2(rcl_timer_t *timer, int64_t last_call_time)
+{
+    // Publish the PID Kp value for debugging (if necessary)
+    float dt = last_call_time / 1000000000.0f;
+    float_test.data = dt;
+    rcl_publish(&pico_float_publisher, &float_test, NULL);
+    motor_iteration(dt);
+
+    // Publish an example integer value (e.g., motor encoder count)
+    msg_int_test.data = get_encoder_count_A(); // Or any other relevant integer value
+    rcl_publish(&pico_int_publisher, &msg_int_test, NULL);
+}
 int main()
 {
     stdio_init_all(); // Initialize all configured stdio types
@@ -200,7 +238,7 @@ int main()
 
     // Initialize motors
     #if ROSMODE
-        float kp = 10, ki = 1, kd = 0;
+        float kp = 3, ki = 10, kd = 0.28;
         init_motor(&leftMotor, MOTOR1_PWM, MOTOR1_IN1, MOTOR1_IN2, MOTOR1_ENCODER, kp, ki, kd, 0);
         init_motor(&rightMotor, MOTOR2_PWM, MOTOR2_IN1, MOTOR2_IN2, MOTOR2_ENCODER, kp, ki, kd, 0);
 
@@ -257,6 +295,12 @@ int main()
             &node,
             ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
             "pico_string_publisher");
+
+        rclc_publisher_init_default(
+            &imu_publisher,
+            &node,
+            ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu),
+            "/imu/data");
 
         // Initialize the float publisher for debugging
         rclc_publisher_init_default(
@@ -351,14 +395,34 @@ int main()
 
     while (true)
     {
+        
         #if ROSMODE
             rclc_executor_spin_some(&executor, RCL_MS_TO_NS(20));
         #else
+        // Use non-blocking input with timeout
+        int ch = getchar_timeout_us(0); // Returns PICO_ERROR_TIMEOUT if no character is available
+
+        if (ch != PICO_ERROR_TIMEOUT) {
+            // If a character is received, echo it back to the USB serial
+            printf("before\n");
             icm42688_read_accel(i2c_default, &ax, &ay, &az);
-            icm42688_read_gyro(i2c_default, &gx, &gy, &gz);
+            icm42688_read_gyro (i2c_default, &gx, &gy, &gz);
+            icm42688_calibrate_gyro(i2c_default,2000);
             printf("Accel: ax=%.2f ay=%.2f az=%.2f\n", ax, ay, az);
             printf("Gyro: gx=%.2f gy=%.2f gz=%.2f\n", gx, gy, gz);
-            sleep_ms(500);
+            printf("after\n");
+             icm42688_read_accel(i2c_default, &ax, &ay, &az);
+            icm42688_read_gyro_corrected (i2c_default, &gx, &gy, &gz);
+        }
+        else
+        {
+            // If no character is received, do nothing
+            printf("No character received\n");
+        }
+        printf("Test\n");
+        // Sleep to prevent the loop from running too fast
+        sleep_ms(1000);
+           
         #endif
     }
 

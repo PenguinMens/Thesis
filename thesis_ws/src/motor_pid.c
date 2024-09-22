@@ -18,19 +18,40 @@ double pid_update(PIDController* pid, double input, double dt) {
 
     double error = pid->setpoint - input;
     pid->error = error;
-    pid->integral = pid->integral + error * dt;
+
+    // Integral calculation with clamping (anti-windup)
+    pid->integral += error * dt;
+    
+    // Clamp integral to avoid windup (optional thresholds)
+    double integral_max = PWM_MOTOR_MAX / pid->Ki;  // Adjust this threshold as needed
+    double integral_min = -integral_max;
+    if (pid->integral > integral_max) {
+        pid->integral = integral_max;
+    } else if (pid->integral < integral_min) {
+        pid->integral = integral_min;
+    }
+
+    // Derivative calculation
     double derivative = (error - pid->previous_error) / dt;
     pid->derivative = derivative;
 
+    // Compute PID output
     double output = pid->Kp * error + pid->Ki * pid->integral + pid->Kd * derivative;
-    if( output > PWM_MOTOR_MAX){
+
+    // Output clamping to prevent overshooting the motor limits
+    if (output > PWM_MOTOR_MAX) {
         output = PWM_MOTOR_MAX;
+    } else if (output < -PWM_MOTOR_MAX) {
+        output = -PWM_MOTOR_MAX;
     }
+
+    // Store current output and previous error for next iteration
     pid->output = output;
     pid->previous_error = error;
-   
+
     return output;
 }
+
 // Set new setpoint for PID controller
 void pid_set_setpoint(PIDController* pid, double setpoint) {
     pid->setpoint = setpoint;

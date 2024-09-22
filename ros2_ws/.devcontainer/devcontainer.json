@@ -2,14 +2,15 @@
     "name": "ROS 2 Development Container",
     "privileged": true,
     "remoteUser": "gabriel",
+    "initializeCommand": "ls",
     "build": {
         "dockerfile": "Dockerfile",
         "args": {
             "USERNAME": "gabriel"
         }
     },
-    "workspaceFolder": "/home/ws",
-    "workspaceMount": "source=${localWorkspaceFolder},target=/home/ws/src,type=bind",
+    "workspaceFolder": "/home/gabriel/Thesis/ros2_ws",
+    "workspaceMount": "source=${localWorkspaceFolder},target=//home/gabriel/Thesis/ros2_ws,type=bind",
     "customizations": {
         "vscode": {
             "extensions":[
@@ -29,14 +30,13 @@
     },
     "runArgs": [
         "--net=host",
+        "--pid=host",
+        "--ipc=host",
         "-e", "DISPLAY=${env:DISPLAY}"
     ],
     "mounts": [
        "source=/tmp/.X11-unix,target=/tmp/.X11-unix,type=bind,consistency=cached",
-        "source=/dev/dri,target=/dev/dri,type=bind,consistency=cached",
-        "source=${localWorkspaceFolder}/../cache/ROS_DISTRO/build,target=/home/ws/build,type=bind",
-        "source=${localWorkspaceFolder}/../cache/ROS_DISTRO/install,target=/home/ws/install,type=bind",
-        "source=${localWorkspaceFolder}/../cache/ROS_DISTRO/log,target=/home/ws/log,type=bind"
+       "source=/dev/dri,target=/dev/dri,type=bind,consistency=cached"
     ],
-    "postCreateCommand": "sudo rosdep update && sudo rosdep install --from-paths src --ignore-src -y && sudo chown -R gabriel /home/ws/"
+    "postCreateCommand": "sudo rosdep update && sudo rosdep install --from-paths src --ignore-src -y && sudo chown -R $(whoami) /home/gabriel/Thesis/ros2_ws"
 }

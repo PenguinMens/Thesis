@@ -1,7 +1,28 @@
 #include "icm42688.h"
 #include "pico/stdlib.h"
 
+float gyro_bias_x = -0.53052;
+float gyro_bias_y = -0.35995;
+float gyro_bias_z = -0.19629;
 
+void icm42688_calibrate_gyro(i2c_inst_t *i2c, int num_samples) {
+    printf("Calibrating gyroscope...\n");
+    float gx, gy, gz;
+    
+    for (int i = 0; i < num_samples; i++) {
+        icm42688_read_gyro(i2c, &gx, &gy, &gz);
+        gyro_bias_x += gx;
+        gyro_bias_y += gy;
+        gyro_bias_z += gz;
+        sleep_ms(1);  // Adjust based on your IMU's ODR (Output Data Rate)
+    }
+
+    gyro_bias_x /= num_samples;
+    gyro_bias_y /= num_samples;
+    gyro_bias_z /= num_samples;
+
+    printf("Gyroscope biases: gx=%.5f, gy=%.5f, gz=%.5f\n", gyro_bias_x, gyro_bias_y, gyro_bias_z);
+}
 
 int reg_write(i2c_inst_t *i2c, 
               const uint addr, 
@@ -161,4 +182,15 @@ void icm42688_read_gyro(i2c_inst_t *i2c, float *gx, float *gy, float *gz) {
     *gz = (float)((int16_t)(rawData[4] << 8 | rawData[5])) * gyroScale;
 
     // printf("Gyro: gx=%.2f, gy=%.2f, gz=%.2f\n", *gx, *gy, *gz);
+}
+
+void icm42688_read_gyro_corrected(i2c_inst_t *i2c, float *gx, float *gy, float *gz) {
+    icm42688_read_gyro(i2c, gx, gy, gz);
+    
+    // Subtract the bias from the raw readings
+    *gx -= gyro_bias_x;
+    *gy -= gyro_bias_y;
+    *gz -= gyro_bias_z;
+    
+    printf("Corrected Gyro: gx=%.2f, gy=%.2f, gz=%.2f\n", *gx, *gy, *gz);
 }

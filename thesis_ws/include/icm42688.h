@@ -158,7 +158,7 @@ void icm42688_init(i2c_inst_t *i2c);
 
 void icm42688_read_accel(i2c_inst_t *i2c, float *ax, float *ay, float *az);
 void icm42688_read_gyro(i2c_inst_t *i2c, float *gx, float *gy, float *gz);
+void icm42688_calibrate_gyro(i2c_inst_t *i2c, int num_samples);
 
-
-
+void icm42688_read_gyro_corrected(i2c_inst_t *i2c, float *gx, float *gy, float *gz);
 #endif
