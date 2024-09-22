@@ -11,10 +11,10 @@
               <param name="device">/dev/serial/by-path/platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.3:1.0-port0</param>
               <param name="baud_rate">115200</param>
               <param name="timeout_ms">1000</param>
-              <param name="enc_counts_per_rev">3436</param>
-              <param name="pid_p">14</param>
-              <param name="pid_d">5</param>
-              <param name="pid_i">0.05</param>
+              <param name="enc_counts_per_rev">3120</param>
+              <param name="pid_p">3</param>
+              <param name="pid_d">10</param>
+              <param name="pid_i">0.28</param>
               <param name="pid_o">50</param>
             </hardware>
             <joint name="left_wheel_joint">

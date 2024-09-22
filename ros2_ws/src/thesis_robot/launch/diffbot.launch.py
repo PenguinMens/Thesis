@@ -34,12 +34,12 @@ def generate_launch_description():
     )
     declared_arguments.append(
         DeclareLaunchArgument(
-            "use_mock_hardware",
+            "sim_mode",
             default_value="false",
             description="Start robot with mock hardware mirroring command to its states.",
         )
     )
-
+    
      # Path to the launch file you want to include
     joystick_launch_file = PathJoinSubstitution(
         [FindPackageShare('thesis_robot'), 'launch', 'joystick_launch.py']  # Adjust the filename as needed
@@ -47,7 +47,7 @@ def generate_launch_description():
     
     # Initialize Arguments
     gui = LaunchConfiguration("gui")
-    use_mock_hardware = LaunchConfiguration("use_mock_hardware")
+    sim_mode = LaunchConfiguration("sim_mode")
 
     # Get URDF via xacro
     robot_description_content = Command(
@@ -58,10 +58,17 @@ def generate_launch_description():
                 [FindPackageShare("thesis_robot"), "urdf", "robot.urdf.xacro"]
             ),
             " ",
-            "use_mock_hardware:=",
-            use_mock_hardware,
+            "sim_mode:=",
+            sim_mode,
         ]
-    )
+    )   
+    twist_mux_params = PathJoinSubstitution([FindPackageShare('thesis_robot'), 'config', 'twist_mux.yaml'])
+    twist_mux = Node(
+            package="twist_mux",
+            executable="twist_mux",
+            parameters=[twist_mux_params],
+            remappings=[('/cmd_vel_out','/diffbot_base_controller/cmd_vel_unstamped')]
+        )
 
     robot_description = {"robot_description": robot_description_content}
 
@@ -90,9 +97,9 @@ def generate_launch_description():
         executable="robot_state_publisher",
         output="both",
         parameters=[robot_description],
-        remappings=[
-            ("/diffbot_base_controller/cmd_vel_unstamped", "/cmd_vel"),
-        ],
+        # remappings=[
+        #     ("/diffbot_base_controller/cmd_vel_unstamped", "/cmd_vel"),
+        # ],
     )
     rviz_node = Node(
         package="rviz2",
@@ -114,6 +121,7 @@ def generate_launch_description():
         executable="spawner",
         arguments=["diffbot_base_controller", "--controller-manager", "/controller_manager"],
     )
+    
 
 
 
@@ -137,10 +145,11 @@ def generate_launch_description():
 
 
     nodes = [
+        twist_mux,
         control_node,
         robot_state_pub_node,
         robot_controller_spawner,
-        delay_rviz_after_joint_state_broadcaster_spawner,
+        rviz_node,
         delay_joint_state_broadcaster_after_robot_controller_spawner,
     ]
 

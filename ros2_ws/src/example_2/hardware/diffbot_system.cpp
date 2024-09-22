@@ -231,7 +231,7 @@ hardware_interface::return_type DiffBotSystemHardware::read(
 
   int32_t pulse_count_left = diffbot_communicator_.getLeftWheelEncoder();
   int32_t pulse_count_right = diffbot_communicator_.getRightWheelEncoder();
-  wheel_l_.enc = pulse_count_left;
+  wheel_l_.enc = pulse_count_left; // wheels spinning wrong way if possive, quick fix to make it negative for now
   wheel_r_.enc = pulse_count_right;
 
   double delta_seconds = period.seconds();

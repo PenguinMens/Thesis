@@ -16,10 +16,9 @@ teleop_node:
     axis_angular:
       yaw: 0
     scale_angular:
-      yaw: 0.5
+      yaw: 1.5    # Inverted angular scale to correct the direction
     scale_angular_turbo:
-      yaw: 1.0
-
+      yaw: 3.0    # Inverted for turbo mode too
 
     enable_button: 5
     enable_turbo_button: 6

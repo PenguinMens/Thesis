@@ -22,16 +22,16 @@ def generate_launch_description():
             executable='teleop_node',
             name='teleop_node',
             parameters=[joy_params, {'use_sim_time': use_sim_time}],
-            remappings=[('/cmd_vel','/diffbot_base_controller/cmd_vel_unstamped')]
+            remappings=[('/cmd_vel','/cmd_vel_joy')]
          )
 
-    twist_stamper = Node(
-            package='twist_stamper',
-            executable='twist_stamper',
-            parameters=[{'use_sim_time': use_sim_time}],
-            remappings=[('/cmd_vel_in','/diffbot_base_controller/cmd_vel_unstamped'),
-                        ('/cmd_vel_out','/diffbot_base_controller/cmd_vel')]
-         )
+    # twist_stamper = Node(
+    #         package='twist_stamper',
+    #         executable='twist_stamper',
+    #         parameters=[{'use_sim_time': use_sim_time}],
+    #         remappings=[('/cmd_vel_in','/diffbot_base_controller/cmd_vel_unstamped'),
+    #                     ('/cmd_vel_out','/diffbot_base_controller/cmd_vel')]
+    #      )
 
 
     return LaunchDescription([
@@ -41,5 +41,6 @@ def generate_launch_description():
             description='Use sim time if true'),
         joy_node,
         teleop_node,
+ 
         # twist_stamper       
     ])
