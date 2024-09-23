@@ -26,7 +26,7 @@
 #define PWM_MAX 50.0f
 #define ROSMODE 1
 #include "tusb.h"  // TinyUSB header for USB CDC support
-const int reverse_direction = -1;
+const int reverse_direction = 1;
 const uint LED_PIN = 25;
 
 rcl_publisher_t pico_string_publisher, pico_float_publisher, publisher_odometer, pico_int_publisher, left_encoder, right_encoder, imu_publisher;
@@ -98,8 +98,8 @@ void motor_iteration(double dt)
         rightMotor.motorStats.pid.integral = 0;
         outputB = 0;
     }
-    control_motor(rightMotor, -outputB, pwmB);
-    control_motor(leftMotor, -outputA, pwmA);
+    control_motor(rightMotor, /*NOTREVERSED*/outputB, pwmB);
+    control_motor(leftMotor, /*NOTREVERSED*/outputA, pwmA);
 
     rightMotor.motorStats.PWM = outputB;
     leftMotor.motorStats.PWM = outputA;
@@ -126,7 +126,7 @@ void left_wheel_cmd_callback(const void *msgin)
 
     // Set the PID setpoint for the left motor
     // Negative value for reverse direction
-    pid_set_setpoint(&leftMotor.motorStats.pid, -msg_received->data  );
+    pid_set_setpoint(&leftMotor.motorStats.pid, msg_received->data  );
 }
 
 void right_wheel_cmd_callback(const void *msgin)
@@ -138,7 +138,7 @@ void right_wheel_cmd_callback(const void *msgin)
     rcl_ret_t ret = rcl_publish(&pico_string_publisher, &msg_string_test, NULL);
 
     // Set the PID setpoint for the right motor
-    pid_set_setpoint(&rightMotor.motorStats.pid, -msg_received->data ); 
+    pid_set_setpoint(&rightMotor.motorStats.pid, msg_received->data ); 
 }
 
 void pid_state_callback(const void *msgin)
@@ -191,12 +191,12 @@ void imu_publish()
 void timer_callback1(rcl_timer_t *timer, int64_t last_call_time)
 {
     float dt = last_call_time / 1000000000.0f; // ns to s
-    int left_encoder_count = get_encoder_count_A() * reverse_direction;
-    int right_encoder_count = get_encoder_count_B() * reverse_direction;
-    left_encoder_msg.data = left_encoder_count;
-    right_encoder_msg.data = right_encoder_count;
+    int left_encoder_count = /*NOTREVERSED*/get_encoder_count_A() ;
+    int right_encoder_count = /*NOTREVERSED*/get_encoder_count_B() ;
+    left_encoder_msg.data = -left_encoder_count;
+    right_encoder_msg.data = -right_encoder_count;
 
-    calc_stats(dt, &odo_vals, left_encoder_count, right_encoder_count, &leftMotor.motorStats, &rightMotor.motorStats);
+    calc_stats(dt, &odo_vals, -left_encoder_count, -right_encoder_count, &leftMotor.motorStats, &rightMotor.motorStats);
 
     rcl_publish(&left_encoder, &left_encoder_msg, NULL);
     rcl_publish(&right_encoder, &right_encoder_msg, NULL);
@@ -239,8 +239,8 @@ int main()
     // Initialize motors
     #if ROSMODE
         float kp = 3, ki = 10, kd = 0.28;
-        init_motor(&leftMotor, MOTOR1_PWM, MOTOR1_IN1, MOTOR1_IN2, MOTOR1_ENCODER, kp, ki, kd, 0);
-        init_motor(&rightMotor, MOTOR2_PWM, MOTOR2_IN1, MOTOR2_IN2, MOTOR2_ENCODER, kp, ki, kd, 0);
+        init_motor(&leftMotor, MOTOR1_PWM,  MOTOR1_IN2, MOTOR1_IN1, MOTOR1_ENCODER, kp, ki, kd, 0);
+        init_motor(&rightMotor, MOTOR2_PWM, MOTOR2_IN2,  MOTOR2_IN1, MOTOR2_ENCODER, kp, ki, kd, 0);
 
         // Initialize encoders
         init_PIO_encoder(MOTOR1_ENCODER, MOTOR2_ENCODER, ENCODERA, ENCODERB);

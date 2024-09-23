@@ -40,3 +40,6 @@ log/
 build/
 install/
 .vscode/
+
+articubot_one/
+ros2_ws/src/articubot_one/
