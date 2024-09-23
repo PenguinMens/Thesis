@@ -284,12 +284,17 @@ int main()
             // Unreachable agent, exiting program.
             return ret;
         }
+        
 
-        rclc_support_init(&support, 0, NULL, &allocator);
+        rcl_init_options_t init_options = rcl_get_zero_initialized_init_options();
+        rcl_init_options_init(&init_options, allocator);
+        rcl_init_options_set_domain_id(&init_options, 42);
 
+
+        rclc_support_init_with_options(&support, 0, NULL, &init_options, &allocator);
+        // Initialize the string publisher
         rclc_node_init_default(&node, "pico_node", "", &support);
 
-        // Initialize the string publisher
         rclc_publisher_init_default(
             &pico_string_publisher,
             &node,
