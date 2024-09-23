@@ -193,9 +193,11 @@ void timer_callback1(rcl_timer_t *timer, int64_t last_call_time)
     float dt = last_call_time / 1000000000.0f; // ns to s
     int left_encoder_count = /*NOTREVERSED*/get_encoder_count_A() ;
     int right_encoder_count = /*NOTREVERSED*/get_encoder_count_B() ;
-    left_encoder_msg.data = -left_encoder_count;
-    right_encoder_msg.data = -right_encoder_count;
+    left_encoder_msg.data = left_encoder_count;
+    right_encoder_msg.data = right_encoder_count;
 
+    // set LEFT And RIGHT to - because cmd_vel positive is negative in terms of speed here
+    // this is a quick fix will change it later
     calc_stats(dt, &odo_vals, -left_encoder_count, -right_encoder_count, &leftMotor.motorStats, &rightMotor.motorStats);
 
     rcl_publish(&left_encoder, &left_encoder_msg, NULL);
