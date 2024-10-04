@@ -28,7 +28,6 @@
         "ROS_LOCALHOST_ONLY": "0",
         "ROS_DOMAIN_ID": "42"
     },
-    
     "runArgs": [
         "--net=host",
         "--pid=host",
@@ -39,5 +38,5 @@
        "source=/tmp/.X11-unix,target=/tmp/.X11-unix,type=bind,consistency=cached",
        "source=/dev/dri,target=/dev/dri,type=bind,consistency=cached"
     ],
-    "postCreateCommand": "sudo rosdep update && sudo rosdep install --from-paths src --ignore-src -y && sudo chown -R $(whoami) /home/gabriel/Thesis/ros2_ws"
+    "postCreateCommand": "sudo apt-get update && sudo rosdep update && sudo rosdep install --from-paths src --ignore-src -y && sudo chown -R $(whoami) /home/gabriel/Thesis/ros2_ws"
 }
