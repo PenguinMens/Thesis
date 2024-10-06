@@ -49,8 +49,7 @@ void read_and_display_data(float *ax, float *ay, float *az, float *gx, float *gy
 void read_and_display_data_calibrated(float *ax, float *ay, float *az, float *gx, float *gy, float *gz)
 {
     uint32_t curr_time = to_ms_since_boot(get_absolute_time());
-    icm42688_read_accel(i2c_default, ax, ay, az);
-    icm42688_read_gyro_corrected(i2c_default, gx, gy, gz);
+    icm42688_read_average(i2c_default,ax,ay,az, gx, gy, gz);
     printf("A: %.4f %.4f %.4f G: %.4f %.4f %.4f %u\n", *ax, *ay, *az,  *gx, *gy, *gz, curr_time);
 
 }
@@ -58,8 +57,7 @@ void read_and_display_data_calibrated(float *ax, float *ay, float *az, float *gx
 void read_and_display_data_average(float *ax, float *ay, float *az, float *gx, float *gy, float *gz)
 {
     uint32_t curr_time = to_ms_since_boot(get_absolute_time());
-    icm42688_read_accel(i2c_default, ax, ay, az);
-    icm42688_read_gyro_average(i2c_default, gx, gy, gz);
+    icm42688_read_average(i2c_default,ax,ay,az, gx, gy, gz);
     printf("A: %.4f %.4f %.4f G: %.4f %.4f %.4f %u\n", *ax, *ay, *az,  *gx, *gy, *gz, curr_time);
 
 }
@@ -116,7 +114,7 @@ void continuous_read_imu_average(float *ax, float *ay, float *az, float *gx, flo
         // Read and display IMU data
         read_and_display_data_average(ax, ay, az, gx, gy, gz);
         
-        sleep_ms(100);  // Adjust this delay based on how often you want to print data
+        sleep_ms(200);  // Adjust this delay based on how often you want to print data
     }
 }
 
@@ -152,12 +150,12 @@ int main()
                 
                 
                 printf("\nApplying Gyro Calibration...\n");
-                icm42688_calibrate_gyro(i2c_default, CALIBRATION_SAMPLES);
+                icm42688_calibrate(i2c_default, CALIBRATION_SAMPLES);
                 
 
                 display_header("Reading Sensor Data After Calibration");
-                icm42688_read_gyro_corrected(i2c_default, &gx, &gy, &gz);
-
+                read_and_display_data_calibrated(&ax, &ay, &az, &gx, &gy, &gz);
+                
                 printf("Calibration applied successfully.\n");
             }
             else if (ch == 'c' || ch == 'C')  // Start continuous reading
@@ -183,7 +181,7 @@ int main()
         }
         else
         {
-            if(counter == 3)
+            if(counter == 20)
             {
                 printf("Waiting for user input (press 'S' to start, 'C' for continuous, 'Q' to quit)...\n");
                 uint8_t i = -1;

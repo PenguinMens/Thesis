@@ -1,57 +1,90 @@
 #include "icm42688.h"
 #include "pico/stdlib.h"
 
-#define GYRO_HISTORY_SIZE 10
+#define HISTORY_SIZE 10
 
 float gyro_bias_x = -1.35;
 float gyro_bias_y = -0.19;
 float gyro_bias_z = -0.36;
+float accel_bias_x = 0.0;
+float accel_bias_y = 0.0;
+float accel_bias_z = 0.0;
 
-float gyro_x_history[GYRO_HISTORY_SIZE];
-float gyro_y_history[GYRO_HISTORY_SIZE];
-float gyro_z_history[GYRO_HISTORY_SIZE];
+
+
+float accel_x_history[HISTORY_SIZE];
+float accel_y_history[HISTORY_SIZE];
+float accel_z_history[HISTORY_SIZE];
+float gyro_x_history[HISTORY_SIZE];
+float gyro_y_history[HISTORY_SIZE];
+float gyro_z_history[HISTORY_SIZE];
+
 int idx = 0;
 
 float accel_scale = 4.0f;
 float gyro_scale = 1000.0f;
 
-void moving_average(float *gx, float *gy, float *gz) {
+void moving_average(float *gx, float *gy, float *gz, float *ax, float *ay, float *az) {
     float sum_x = 0, sum_y = 0, sum_z = 0;
+    float sum_ax = 0, sum_ay = 0, sum_az = 0;
     gyro_x_history[idx] = *gx;
     gyro_y_history[idx] = *gy;
     gyro_z_history[idx] = *gz;
-    idx = (idx + 1) % GYRO_HISTORY_SIZE;
+    accel_x_history[idx] = *ax;
+    accel_y_history[idx] = *ay;
+    accel_z_history[idx] = *az;
+    idx = (idx + 1) % HISTORY_SIZE;
 
-    for (int i = 0; i < GYRO_HISTORY_SIZE; i++) {
+    for (int i = 0; i < HISTORY_SIZE; i++) {
         sum_x += gyro_x_history[i];
         sum_y += gyro_y_history[i];
         sum_z += gyro_z_history[i];
+        sum_ax += accel_x_history[i];   
+        sum_ay += accel_y_history[i];
+        sum_az += accel_z_history[i];
     }
 
-    *gx = sum_x / GYRO_HISTORY_SIZE;
-    *gy = sum_y / GYRO_HISTORY_SIZE;
-    *gz = sum_z / GYRO_HISTORY_SIZE;
+    *gx = sum_x / HISTORY_SIZE;
+    *gy = sum_y / HISTORY_SIZE;
+    *gz = sum_z / HISTORY_SIZE;
+    *ax = sum_ax / HISTORY_SIZE;
+    *ay = sum_ay / HISTORY_SIZE;
+    *az = sum_az / HISTORY_SIZE;
 
     
 }
 
-void icm42688_calibrate_gyro(i2c_inst_t *i2c, int num_samples) {
-    printf("Calibrating gyroscope...\n");
-    float gx, gy, gz;
+
+void icm42688_calibrate(i2c_inst_t *i2c, int num_samples) {
+    //printf("Calibrating gyroscope...\n");
+    float gx, gy, gz, ax, ay, az;
     
     for (int i = 0; i < num_samples; i++) {
+
+        icm42688_read_accel(i2c, &ax, &ay, &az);
         icm42688_read_gyro(i2c, &gx, &gy, &gz);
+        
+        accel_bias_x += ax;
+        accel_bias_y += ay;
+        accel_bias_z += az;
+
         gyro_bias_x += gx;
         gyro_bias_y += gy;
         gyro_bias_z += gz;
         sleep_ms(5);  // Adjust based on your IMU's ODR (Output Data Rate)
     }
 
+    accel_bias_x /= num_samples;
+    accel_bias_y /= num_samples;
+    accel_bias_z /= num_samples ;
     gyro_bias_x /= num_samples;
     gyro_bias_y /= num_samples;
     gyro_bias_z /= num_samples;
 
-    // printf("Gyroscope biases: gx=%.5f, gy=%.5f, gz=%.5f\n", gyro_bias_x, gyro_bias_y, gyro_bias_z);
+    accel_bias_z = accel_bias_z - 1.0f;  // Subtract 1g from the z-axis bias
+
+    printf("Gyroscope biases: gx=%.5f, gy=%.5f, gz=%.5f\n", gyro_bias_x, gyro_bias_y, gyro_bias_z);
+    printf("Accelerometer biases: ax=%.5f, ay=%.5f, az=%.5f\n", accel_bias_x, accel_bias_y, accel_bias_z);
 }
 
 int reg_write(i2c_inst_t *i2c, 
@@ -76,7 +109,7 @@ int reg_write(i2c_inst_t *i2c,
     // Write data to register(s) over I2C and check for success
     int result = i2c_write_blocking(i2c, addr, msg, (nbytes + 1), false);
     if (result < 0) {
-        printf("I2C write failed with error code: %d\n", result);
+       //printf("I2C write failed with error code: %d\n", result);
         return result;  // Return the error code if write failed
     }
 
@@ -120,11 +153,11 @@ void set_accel_FS(i2c_inst_t *i2c, uint8_t fs) {
     //get current config
     uint8_t reg;
     get_accel_cfg(i2c, &reg);
-    printf("Setting accel fs to %u fs was %u\n", fs, reg);
+   //printf("Setting accel fs to %u fs was %u\n", fs, reg);
     //set new fs
     reg =  (fs << 5) | (reg & 0x1F) ;
 
-    printf("after shift%u\n", reg);
+   //printf("after shift%u\n", reg);
     uint8_t buf[] = {ICM42688_ACCEL_CONFIG0, reg};
     reg_write(i2c, ICM42688_I2C_L_ADDR, buf[0], &buf[1], 1);
 
@@ -203,36 +236,36 @@ static uint8_t icm42688_who_am_i(i2c_inst_t *i2c) {
 
 
 void icm42688_init(i2c_inst_t *i2c) {
-    printf("Initializing ICM-42688P...\n");
+   //printf("Initializing ICM-42688P...\n");
 
     // WHO AM I
     uint8_t id = icm42688_who_am_i(i2c);
     if (id != ICM42688_ID) {
-        printf("WHO_AM_I failed. Expected 0x49, got 0x%02X\n", id);
+       //printf("WHO_AM_I failed. Expected 0x49, got 0x%02X\n", id);
         return ; // Early return on error
     } else {
-        printf("WHO_AM_I successful. Device ID: 0x%02X\n", id);
+       //printf("WHO_AM_I successful. Device ID: 0x%02X\n", id);
     }
 
 
     // Reset the device
-    printf("Attempting to reset the device...\n");
+   //printf("Attempting to reset the device...\n");
     uint8_t buf[] = {ICM42688_SIGNAL_PATH_RESET, 0x80};
     int result = reg_write(i2c, ICM42688_I2C_L_ADDR, buf[0], &buf[1], 1);
     
     if (result < 0) {
-        printf("Failed to reset the device. Error code: %d\n", result);
+       //printf("Failed to reset the device. Error code: %d\n", result);
         return; // Early return on error
     } else {
-        printf("Device reset successful.\n");
+       //printf("Device reset successful.\n");
     }
 
     sleep_ms(100);  // Wait for reset
     uint8_t ODRCfg = odr200; // ODR 200hz
     uint8_t gyro_FS = dps1000;
     uint8_t accel_FS = gpm4;
-    printf("Configuring gyroscope: Full scale ±1000dps, ODR 200Hz...\n");
-    printf("Configuring accelerometer: Full scale ±4g, ODR 200Hz...\n");
+   //printf("Configuring gyroscope: Full scale ±1000dps, ODR 200Hz...\n");
+   //printf("Configuring accelerometer: Full scale ±4g, ODR 200Hz...\n");
     set_gyro_ODR(i2c, ODRCfg); // set speed at 200hz
     set_accel_ODR(i2c, ODRCfg);
     set_gyro_FS(i2c, gyro_FS); // set full scale at 1000dps
@@ -244,17 +277,17 @@ void icm42688_init(i2c_inst_t *i2c) {
     get_gyro_cfg(i2c, &gyro_cg);
     get_accel_cfg(i2c, &accel_cg);
     if(gyro_cg != ((gyro_FS << 5) + ODRCfg)){
-        printf("Failed to set gyro config returned %u not %u\n", gyro_cg, (gyro_FS << 5) + ODRCfg);
+       //printf("Failed to set gyro config returned %u not %u\n", gyro_cg, (gyro_FS << 5) + ODRCfg);
     }
     else{
-        printf("Gyro success config set to %u\n", gyro_cg);
+       //printf("Gyro success config set to %u\n", gyro_cg);
     }
 
     if(accel_cg != ((accel_FS << 5  )+ ODRCfg)){
-        printf("Failed to set accel config returned %u not %u\n", accel_cg, (accel_FS << 5 ) + ODRCfg);
+       //printf("Failed to set accel config returned %u not %u\n", accel_cg, (accel_FS << 5 ) + ODRCfg);
     }
     else{
-        printf("Accel success config set to %u\n", accel_cg);
+       //printf("Accel success config set to %u\n", accel_cg);
     }
     
     
@@ -267,7 +300,7 @@ void icm42688_init(i2c_inst_t *i2c) {
 
 
 
-    printf("ICM-42688P initialized.\n");
+   //printf("ICM-42688P initialized.\n");
 }
 
 
@@ -277,13 +310,13 @@ void icm42688_read_accel(i2c_inst_t *i2c, float *ax, float *ay, float *az) {
     reg_read(i2c, ICM42688_I2C_L_ADDR, ICM42688_ACCEL_DATA_X1, rawData, 6);
 
     // Scaling factor based on ±4g full-scale range
-
+    
 
     *ax = (float)((int16_t)(rawData[0] << 8 | rawData[1])) * accel_scale;
     *ay = (float)((int16_t)(rawData[2] << 8 | rawData[3])) * accel_scale;
     *az = (float)((int16_t)(rawData[4] << 8 | rawData[5])) * accel_scale;
 
-    // printf("Accel: ax=%.2f, ay=%.2f, az=%.2f\n", *ax, *ay, *az);
+    //printf("Accel: ax=%.2f, ay=%.2f, az=%.2f\n", *ax, *ay, *az);
 }
 
 void icm42688_read_gyro(i2c_inst_t *i2c, float *gx, float *gy, float *gz) {
@@ -298,7 +331,7 @@ void icm42688_read_gyro(i2c_inst_t *i2c, float *gx, float *gy, float *gz) {
     *gy = (float)((int16_t)(rawData[2] << 8 | rawData[3])) * gyro_scale;
     *gz = (float)((int16_t)(rawData[4] << 8 | rawData[5])) * gyro_scale;
 
-    // printf("Gyro: gx=%.2f, gy=%.2f, gz=%.2f\n", *gx, *gy, *gz);
+    ////printf("Gyro: gx=%.2f, gy=%.2f, gz=%.2f\n", *gx, *gy, *gz);
 }
 
 void icm42688_read_gyro_corrected(i2c_inst_t *i2c, float *gx, float *gy, float *gz) {
@@ -309,11 +342,48 @@ void icm42688_read_gyro_corrected(i2c_inst_t *i2c, float *gx, float *gy, float *
     *gy -= gyro_bias_y;
     *gz -= gyro_bias_z;
     
-    // printf("Corrected Gyro: gx=%.2f, gy=%.2f, gz=%.2f\n", *gx, *gy, *gz);
+    ////printf("Corrected Gyro: gx=%.2f, gy=%.2f, gz=%.2f\n", *gx, *gy, *gz);
 }
+
+void icm42688_read_accel_corrected(i2c_inst_t *i2c, float *ax, float *ay, float *az) {
+    icm42688_read_accel(i2c, ax, ay, az);
+    
+    // Subtract the bias from the raw readings
+    float temp_x = *ax;
+    float temp_y = *ay;
+    float temp_z = *az;
+    temp_x = temp_x - accel_bias_x;
+    temp_y = temp_y - accel_bias_y;
+    temp_z = temp_z - accel_bias_z;
+    temp_x = temp_x * -9.81;
+    temp_y = temp_y * -9.81;
+    temp_z = temp_z * 9.81;
+    *ax = temp_x;
+    *ay = temp_y;
+    *az = temp_z;
+    
+    
+    ////printf("Corrected Accel: ax=%.2f, ay=%.2f, az=%.2f\n", *ax, *ay, *az);
+}
+
+
 
 void icm42688_read_gyro_average(i2c_inst_t *i2c, float *gx, float *gy, float *gz) {
     icm42688_read_gyro_corrected(i2c, gx, gy, gz);
-    moving_average(gx, gy, gz);
+    moving_average_gyro(gx, gy, gz);
 }
 
+
+
+void icm42688_read_average(i2c_inst_t *i2c, float *ax, float *ay, float *az, float *gx, float *gy, float *gz) {
+    icm42688_read_accel_corrected(i2c, ax, ay, az);
+    icm42688_read_gyro_corrected(i2c, gx, gy, gz);
+   // printf("testing Accel: ax=%.2f, ay=%.2f, az=%.2f\n", *ax, *ay, *az);
+
+    //printf("Gyro: gx=%.2f, gy=%.2f, gz=%.2f\n", *gx, *gy, *gz);
+
+    moving_average(ax, ay, az, gx, gy, gz); 
+    //printf("Averaged Accel: ax=%.2f, ay=%.2f, az=%.2f\n", *ax, *ay, *az);
+
+
+}
