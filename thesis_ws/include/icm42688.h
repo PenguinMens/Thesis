@@ -148,6 +148,59 @@
 #define ICM42688_OFFSET_USER7           0x7E
 #define ICM42688_OFFSET_USER8           0x7F
 
+// Define the enums as usual
+enum GyroFS {
+    dps2000   = 0x00,
+    dps1000   = 0x01,
+    dps500    = 0x02,
+    dps250    = 0x03,
+    dps125    = 0x04,
+    dps62_5   = 0x05,
+    dps31_25  = 0x06,
+    dps15_625 = 0x07
+};
+
+enum AccelFS {
+    gpm16 = 0x00,
+    gpm8  = 0x01,
+    gpm4  = 0x02,
+    gpm2  = 0x03
+};
+
+enum ODR {
+    odr32k    = 0x01,  // LN mode only
+    odr16k    = 0x02,  // LN mode only
+    odr8k     = 0x03,  // LN mode only
+    odr4k     = 0x04,  // LN mode only
+    odr2k     = 0x05,  // LN mode only
+    odr1k     = 0x06,  // LN mode only
+    odr200    = 0x07,
+    odr100    = 0x08,
+    odr50     = 0x09,
+    odr25     = 0x0A,
+    odr12_5   = 0x0B,
+    odr6a25   = 0x0C,  // LP mode only (accel only)
+    odr3a125  = 0x0D,  // LP mode only (accel only)
+    odr1a5625 = 0x0E,  // LP mode only (accel only)
+    odr500    = 0x0F
+};
+
+enum GyroNFBWsel {
+    nfBW1449Hz = 0x00,
+    nfBW680Hz  = 0x01,
+    nfBW329Hz  = 0x02,
+    nfBW162Hz  = 0x03,
+    nfBW80Hz   = 0x04,
+    nfBW40Hz   = 0x05,
+    nfBW20Hz   = 0x06,
+    nfBW10Hz   = 0x07
+};
+
+enum UIFiltOrd {
+    first_order  = 0x00,
+    second_order = 0x01,
+    third_order  = 0x02
+};
 
 
 
@@ -159,6 +212,8 @@ void icm42688_init(i2c_inst_t *i2c);
 void icm42688_read_accel(i2c_inst_t *i2c, float *ax, float *ay, float *az);
 void icm42688_read_gyro(i2c_inst_t *i2c, float *gx, float *gy, float *gz);
 void icm42688_calibrate_gyro(i2c_inst_t *i2c, int num_samples);
-
 void icm42688_read_gyro_corrected(i2c_inst_t *i2c, float *gx, float *gy, float *gz);
+void icm42688_read_gyro_average(i2c_inst_t *i2c, float *gx, float *gy, float *gz);
+void get_accel_cfg(i2c_inst_t *i2c, uint8_t *buf) ;
+void get_gyro_cfg(i2c_inst_t *i2c, uint8_t *buf) ;
 #endif
