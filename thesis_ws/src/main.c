@@ -25,7 +25,7 @@
 #include "motor_calcs.h"
 #include "icm42688.h"
 #define PWM_MAX 50.0f
-#define ROSMODE 0
+#define ROSMODE 1
 #include "tusb.h"  // TinyUSB header for USB CDC support
 const int reverse_direction = 1;
 const uint LED_PIN = 25;
@@ -122,21 +122,14 @@ void imu_calibration_callback(const void * request_msg, void * response_msg){
     (std_srvs__srv__Trigger_Response *) response_msg;
 
   // Handle request message and set the response message values
-   icm42688_calibrate_gyro(i2c_default,1000);
+   icm42688_calibrate(i2c_default,1000);
    res_in->success = true;
     res_in->message.data = "Calibration successful!";
     
   
 }
 
-void print_pid_terms()
-{
-    char pid_string[50];
-    sprintf(pid_string, "PID: P=%f, I=%f, D=%f", leftMotor.motorStats.pid.Kp, leftMotor.motorStats.pid.Ki, leftMotor.motorStats.pid.Kd);
-    msg_string_pid.data.data = pid_string;
-    msg_string_pid.data.size = strlen(pid_string);
-    rcl_ret_t ret = rcl_publish(&pico_string_publisher, &msg_string_pid, NULL);
-}
+
 
 void left_wheel_cmd_callback(const void *msgin)
 {
@@ -183,7 +176,7 @@ void pid_state_callback(const void *msgin)
     msg_string_test.data.data = pid_string;
     msg_string_test.data.size = strlen(pid_string);
     rcl_ret_t ret = rcl_publish(&pico_string_publisher, &msg_string_test, NULL);
-    print_pid_terms();
+  
 }
 
 void imu_publish()
@@ -191,8 +184,9 @@ void imu_publish()
 
     ;
     float ax = 0, ay =0 , az = 0 , gx= 0 , gy= 0 , gz=  0;
-    icm42688_read_accel_average(i2c_default, &ax, &ay, &az);
-    icm42688_read_gyro_average(i2c_default, &gx, &gy, &gz);
+   // icm42688_read_average(i2c_default, &ax, &ay, &az, &gx, &gy, &gz); // too show
+    icm42688_read_gyro_corrected(i2c_default, &gx, &gy, &gz);
+    icm42688_read_accel_corrected(i2c_default, &ax, &ay, &az);
     
  
     
@@ -206,6 +200,17 @@ void imu_publish()
     msg_imu.angular_velocity.x = gx;
     msg_imu.angular_velocity.y = gy;
     msg_imu.angular_velocity.z = gz;
+
+        // Set the linear acceleration covariance based on your noise values
+    msg_imu.linear_acceleration_covariance[0] = 0.001;  // X variance (noise very low)
+    msg_imu.linear_acceleration_covariance[4] = 0.001;  // Y variance (small noise)
+    msg_imu.linear_acceleration_covariance[8] = 0.001;  // Z variance (almost no noise)
+
+    // Set the angular velocity covariance based on your noise values
+    msg_imu.angular_velocity_covariance[0] = 0.008;  // X variance
+    msg_imu.angular_velocity_covariance[4] = 0.006;  // Y variance
+    msg_imu.angular_velocity_covariance[8] = 0.007;  // Z variance
+
     rcl_publish(&imu_publisher, &msg_imu, NULL);
 }
 // Timer callback functions for encoder reading and motor calcs
@@ -225,20 +230,16 @@ void timer_callback1(rcl_timer_t *timer, int64_t last_call_time)
     rcl_publish(&left_encoder, &left_encoder_msg, NULL);
     rcl_publish(&right_encoder, &right_encoder_msg, NULL);
     imu_publish();
-    publish_odo();
+    // publish_odo();
 }
 
 void timer_callback2(rcl_timer_t *timer, int64_t last_call_time)
 {
     // Publish the PID Kp value for debugging (if necessary)
-    float dt = last_call_time / 1000000000.0f;
-    float_test.data = dt;
-    rcl_publish(&pico_float_publisher, &float_test, NULL);
+    float dt = last_call_time / 1000000000.0f; // convert ns to s
     motor_iteration(dt);
 
-    // Publish an example integer value (e.g., motor encoder count)
-    msg_int_test.data = get_encoder_count_A(); // Or any other relevant integer value
-    rcl_publish(&pico_int_publisher, &msg_int_test, NULL);
+
 }
 
 int main()
@@ -412,13 +413,13 @@ int main()
         rclc_timer_init_default(
             &timer1,
             &support,
-            RCL_MS_TO_NS(50),
+            RCL_MS_TO_NS(20),
             timer_callback1);
 
         rclc_timer_init_default(
             &timer2,
             &support,
-            RCL_MS_TO_NS(50),
+            RCL_MS_TO_NS(20),
             timer_callback2);
 
         rclc_executor_init(&executor, &support.context, 7, &allocator); // Updated executor count to 6
@@ -439,7 +440,7 @@ int main()
     {
         
         #if ROSMODE
-            rclc_executor_spin_some(&executor, RCL_MS_TO_NS(20));
+            rclc_executor_spin_some(&executor, RCL_MS_TO_NS(10));
        
 
             

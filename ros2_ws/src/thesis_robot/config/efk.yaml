@@ -2,27 +2,28 @@ ekf_filter_node:
   ros__parameters:
     frequency: 20.0
     sensor_timeout: 0.1
-    world_frame: map
+    world_frame: odom
     base_link_frame: base_link
     odom_frame: odom
     map_frame: map
     two_d_mode: true
-
+    publish_tf: true
     odom0: /diffbot_base_controller/odom
-  odom0_config: [false, false, false,
-               false, false, false,
-               true, false, false,
-               false, false, true,
-               false, false, false]
+    odom0_config: [false, false, false,
+                    false, false, false,
+                    true, true, false,
+                    false, false, true,
+                    false, false, false]
     odom0_differential: false
 
   #https://docs.ros.org/en/melodic/api/robot_localization/html/preparing_sensor_data.html
+  # take about diff or relative
     imu0: /imu/data
-    imu0_config: [false, false, false,  # X, Y, Z position (disabled)
-              false, false, false,   # Roll, pitch, yaw (enabled)
-              false, false, false,    # X, Y, Z angular velocity (enabled)
-              false, false, false,   # X, Y, Z linear acceleration (enabled)
-              true,  true,  true]   # X, Y, Z orientation (enabled)
+    imu0_config: [false, false, false,
+                    false, false, true,
+                    false, false, false,
+                    false, false, true,
+                    true, false, false]
     imu0_differential: false
 
 # [x_pos   , y_pos    , z_pos,
