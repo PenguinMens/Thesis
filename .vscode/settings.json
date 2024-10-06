@@ -79,6 +79,8 @@
         "cinttypes": "cpp",
         "typeindex": "cpp",
         "typeinfo": "cpp",
-        "list": "cpp"
+        "list": "cpp",
+        "*.ipp": "c",
+        "empty.h": "c"
     }
 }
