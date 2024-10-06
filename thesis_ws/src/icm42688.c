@@ -1,52 +1,89 @@
 #include "icm42688.h"
 #include "pico/stdlib.h"
 
-#define GYRO_HISTORY_SIZE 10
+#define HISTORY_SIZE 10
 
 float gyro_bias_x = -1.35;
 float gyro_bias_y = -0.19;
 float gyro_bias_z = -0.36;
+float accel_bias_x = 0.0;
+float accel_bias_y = 0.0;
+float accel_bias_z = 0.0;
 
-float gyro_x_history[GYRO_HISTORY_SIZE];
-float gyro_y_history[GYRO_HISTORY_SIZE];
-float gyro_z_history[GYRO_HISTORY_SIZE];
+
+
+float accel_x_history[HISTORY_SIZE];
+float accel_y_history[HISTORY_SIZE];
+float accel_z_history[HISTORY_SIZE];
+float gyro_x_history[HISTORY_SIZE];
+float gyro_y_history[HISTORY_SIZE];
+float gyro_z_history[HISTORY_SIZE];
+
 int idx = 0;
 
 float accel_scale = 4.0f;
 float gyro_scale = 1000.0f;
 
-void moving_average(float *gx, float *gy, float *gz) {
+void moving_average_gyro(float *gx, float *gy, float *gz) {
     float sum_x = 0, sum_y = 0, sum_z = 0;
     gyro_x_history[idx] = *gx;
     gyro_y_history[idx] = *gy;
     gyro_z_history[idx] = *gz;
-    idx = (idx + 1) % GYRO_HISTORY_SIZE;
+    idx = (idx + 1) % HISTORY_SIZE;
 
-    for (int i = 0; i < GYRO_HISTORY_SIZE; i++) {
+    for (int i = 0; i < HISTORY_SIZE; i++) {
         sum_x += gyro_x_history[i];
         sum_y += gyro_y_history[i];
         sum_z += gyro_z_history[i];
     }
 
-    *gx = sum_x / GYRO_HISTORY_SIZE;
-    *gy = sum_y / GYRO_HISTORY_SIZE;
-    *gz = sum_z / GYRO_HISTORY_SIZE;
+    *gx = sum_x / HISTORY_SIZE;
+    *gy = sum_y / HISTORY_SIZE;
+    *gz = sum_z / HISTORY_SIZE;
 
     
 }
 
-void icm42688_calibrate_gyro(i2c_inst_t *i2c, int num_samples) {
+void moving_average_accel(float *ax, float *ay, float *az) {
+    float sum_x = 0, sum_y = 0, sum_z = 0;
+    accel_x_history[idx] = *ax;
+    accel_y_history[idx] = *ay;
+    accel_z_history[idx] = *az;
+    idx = (idx + 1) % HISTORY_SIZE;
+
+    for (int i = 0; i < HISTORY_SIZE; i++) {
+        sum_x += accel_x_history[i];
+        sum_y += accel_y_history[i];
+        sum_z += accel_z_history[i];
+    }
+
+    *ax = sum_x / HISTORY_SIZE;
+    *ay = sum_y / HISTORY_SIZE;
+    *az = sum_z / HISTORY_SIZE;
+}
+
+void icm42688_calibrate(i2c_inst_t *i2c, int num_samples) {
     //printf("Calibrating gyroscope...\n");
-    float gx, gy, gz;
+    float gx, gy, gz, ax, ay, az;
     
     for (int i = 0; i < num_samples; i++) {
+
+        icm42688_read_accel(i2c, &ax, &ay, &az);
         icm42688_read_gyro(i2c, &gx, &gy, &gz);
+        
+        accel_bias_x += ax;
+        accel_bias_y += ay;
+        accel_bias_z += az;
+
         gyro_bias_x += gx;
         gyro_bias_y += gy;
         gyro_bias_z += gz;
         sleep_ms(5);  // Adjust based on your IMU's ODR (Output Data Rate)
     }
 
+    accel_bias_x /= num_samples;
+    accel_bias_y /= num_samples;
+    accel_bias_z /= num_samples + 1.0f;
     gyro_bias_x /= num_samples;
     gyro_bias_y /= num_samples;
     gyro_bias_z /= num_samples;
@@ -277,13 +314,13 @@ void icm42688_read_accel(i2c_inst_t *i2c, float *ax, float *ay, float *az) {
     reg_read(i2c, ICM42688_I2C_L_ADDR, ICM42688_ACCEL_DATA_X1, rawData, 6);
 
     // Scaling factor based on ±4g full-scale range
-
+    
 
     *ax = (float)((int16_t)(rawData[0] << 8 | rawData[1])) * accel_scale;
     *ay = (float)((int16_t)(rawData[2] << 8 | rawData[3])) * accel_scale;
     *az = (float)((int16_t)(rawData[4] << 8 | rawData[5])) * accel_scale;
 
-    ////printf("Accel: ax=%.2f, ay=%.2f, az=%.2f\n", *ax, *ay, *az);
+    //printf("Accel: ax=%.2f, ay=%.2f, az=%.2f\n", *ax, *ay, *az);
 }
 
 void icm42688_read_gyro(i2c_inst_t *i2c, float *gx, float *gy, float *gz) {
@@ -312,8 +349,26 @@ void icm42688_read_gyro_corrected(i2c_inst_t *i2c, float *gx, float *gy, float *
     ////printf("Corrected Gyro: gx=%.2f, gy=%.2f, gz=%.2f\n", *gx, *gy, *gz);
 }
 
+void icm42688_read_accel_corrected(i2c_inst_t *i2c, float *gx, float *gy, float *gz) {
+    icm42688_read_gyro(i2c, gx, gy, gz);
+    
+    // Subtract the bias from the raw readings
+    *gx -= accel_bias_x ;
+    *gy -= accel_bias_y;    
+    *gz -=  accel_bias_z;
+    
+    ////printf("Corrected Gyro: gx=%.2f, gy=%.2f, gz=%.2f\n", *gx, *gy, *gz);
+}
+
+
 void icm42688_read_gyro_average(i2c_inst_t *i2c, float *gx, float *gy, float *gz) {
     icm42688_read_gyro_corrected(i2c, gx, gy, gz);
     moving_average(gx, gy, gz);
 }
 
+
+
+void icm42688_read_accel_average(i2c_inst_t *i2c, float *ax, float *ay, float *az) {
+    icm42688_read_accel(i2c, ax, ay, az);
+    moving_average(ax, ay, az);
+}

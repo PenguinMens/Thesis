@@ -25,7 +25,7 @@
 #include "motor_calcs.h"
 #include "icm42688.h"
 #define PWM_MAX 50.0f
-#define ROSMODE 1
+#define ROSMODE 0
 #include "tusb.h"  // TinyUSB header for USB CDC support
 const int reverse_direction = 1;
 const uint LED_PIN = 25;
@@ -122,7 +122,7 @@ void imu_calibration_callback(const void * request_msg, void * response_msg){
     (std_srvs__srv__Trigger_Response *) response_msg;
 
   // Handle request message and set the response message values
-   // icm42688_calibrate_gyro(i2c_default,1000);
+   icm42688_calibrate_gyro(i2c_default,1000);
    res_in->success = true;
     res_in->message.data = "Calibration successful!";
     
@@ -191,7 +191,7 @@ void imu_publish()
 
     ;
     float ax = 0, ay =0 , az = 0 , gx= 0 , gy= 0 , gz=  0;
-    icm42688_read_accel(i2c_default, &ax, &ay, &az);
+    icm42688_read_accel_average(i2c_default, &ax, &ay, &az);
     icm42688_read_gyro_average(i2c_default, &gx, &gy, &gz);
     
  
@@ -240,6 +240,7 @@ void timer_callback2(rcl_timer_t *timer, int64_t last_call_time)
     msg_int_test.data = get_encoder_count_A(); // Or any other relevant integer value
     rcl_publish(&pico_int_publisher, &msg_int_test, NULL);
 }
+
 int main()
 {
     stdio_init_all(); // Initialize all configured stdio types
@@ -259,7 +260,7 @@ int main()
 
     
     float ax = 0, ay =0 , az = 0 , gx= 0 , gy= 0 , gz=  0;
-
+    uint32_t prev_time = 0;
     // Initialize motors
     #if ROSMODE
         float kp = 3, ki = 10, kd = 0.28;
@@ -439,7 +440,9 @@ int main()
         
         #if ROSMODE
             rclc_executor_spin_some(&executor, RCL_MS_TO_NS(20));
+       
 
+            
 
         #else
         // Use non-blocking input with timeout
@@ -450,12 +453,14 @@ int main()
             printf("before\n");
             icm42688_read_accel(i2c_default, &ax, &ay, &az);
             icm42688_read_gyro (i2c_default, &gx, &gy, &gz);
-            icm42688_calibrate_gyro(i2c_default,2000);
+            icm42688_calibrate(i2c_default,2000);
             printf("Accel: ax=%.2f ay=%.2f az=%.2f\n", ax, ay, az);
             printf("Gyro: gx=%.2f gy=%.2f gz=%.2f\n", gx, gy, gz);
             printf("after\n");
-             icm42688_read_accel(i2c_default, &ax, &ay, &az);
+            icm42688_read_accel_corrected(i2c_default, &ax, &ay, &az);
             icm42688_read_gyro_corrected (i2c_default, &gx, &gy, &gz);
+             printf("Accel: ax=%.2f ay=%.2f az=%.2f\n", ax, ay, az);
+            printf("Gyro: gx=%.2f gy=%.2f gz=%.2f\n", gx, gy, gz);
         }
         else
         {
