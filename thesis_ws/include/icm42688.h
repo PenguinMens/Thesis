@@ -216,5 +216,6 @@ void icm42688_read_gyro_corrected(i2c_inst_t *i2c, float *gx, float *gy, float *
 void icm42688_read_average(i2c_inst_t *i2c, float *ax, float *ay, float *az,float *gx, float *gy, float *gz);
 void get_accel_cfg(i2c_inst_t *i2c, uint8_t *buf) ;
 void get_gyro_cfg(i2c_inst_t *i2c, uint8_t *buf) ;
+void icm42688_get_temperature(i2c_inst_t *i2c, float *temp);
 
 #endif

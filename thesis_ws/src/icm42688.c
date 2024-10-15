@@ -387,3 +387,13 @@ void icm42688_read_average(i2c_inst_t *i2c, float *ax, float *ay, float *az, flo
 
 
 }
+
+void icm42688_get_temperature(i2c_inst_t *i2c, float *temp) {
+    uint8_t rawData[2];
+    // Read 2 bytes from the temperature sensor
+    reg_read(i2c, ICM42688_I2C_L_ADDR, ICM42688_TEMP_DATA1, rawData, 2);
+
+    // Convert the raw data to temperature in degrees Celsius
+    *temp = (float)((int16_t)(rawData[0] << 8 | rawData[1])) / 132.48f + 25.0f;
+    //printf("Temperature: %.2f°C\n", *temp);
+}

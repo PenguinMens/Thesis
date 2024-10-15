@@ -41,8 +41,10 @@ void read_and_display_data(float *ax, float *ay, float *az, float *gx, float *gy
     uint32_t curr_time = to_ms_since_boot(get_absolute_time());
     icm42688_read_accel(i2c_default, ax, ay, az);
     icm42688_read_gyro(i2c_default, gx, gy, gz);
+    float temp;
+    icm42688_get_temperature(i2c_default, &temp);
 
-    printf("A: %.4f %.4f %.4f G: %.4f %.4f %.4f %u\n", *ax, *ay, *az,  *gx, *gy, *gz, curr_time);
+    printf("A: %.4f %.4f %.4f G: %.4f %.4f %.4f %u %.4f\n", *ax, *ay, *az,  *gx, *gy, *gz, curr_time, temp);
 
 }
 
@@ -50,7 +52,10 @@ void read_and_display_data_calibrated(float *ax, float *ay, float *az, float *gx
 {
     uint32_t curr_time = to_ms_since_boot(get_absolute_time());
     icm42688_read_average(i2c_default,ax,ay,az, gx, gy, gz);
-    printf("A: %.4f %.4f %.4f G: %.4f %.4f %.4f %u\n", *ax, *ay, *az,  *gx, *gy, *gz, curr_time);
+    float temp;
+    icm42688_get_temperature(i2c_default, &temp);
+
+    printf("A: %.4f %.4f %.4f G: %.4f %.4f %.4f %u %.4f\n", *ax, *ay, *az,  *gx, *gy, *gz, curr_time, temp);
 
 }
 
@@ -58,7 +63,10 @@ void read_and_display_data_average(float *ax, float *ay, float *az, float *gx, f
 {
     uint32_t curr_time = to_ms_since_boot(get_absolute_time());
     icm42688_read_average(i2c_default,ax,ay,az, gx, gy, gz);
-    printf("A: %.4f %.4f %.4f G: %.4f %.4f %.4f %u\n", *ax, *ay, *az,  *gx, *gy, *gz, curr_time);
+    float temp;
+    icm42688_get_temperature(i2c_default, &temp);
+
+    printf("A: %.4f %.4f %.4f G: %.4f %.4f %.4f %u %.4f\n", *ax, *ay, *az,  *gx, *gy, *gz, curr_time, temp);
 
 }
 
@@ -96,7 +104,7 @@ void continuous_read_imu_calibrated(float *ax, float *ay, float *az, float *gx, 
         // Read and display IMU data
         read_and_display_data_calibrated(ax, ay, az, gx, gy, gz);
         
-        sleep_ms(200);  // Adjust this delay based on how often you want to print data
+        sleep_ms(5);  // Adjust this delay based on how often you want to print data
     }
 }
 
@@ -114,7 +122,7 @@ void continuous_read_imu_average(float *ax, float *ay, float *az, float *gx, flo
         // Read and display IMU data
         read_and_display_data_average(ax, ay, az, gx, gy, gz);
         
-        sleep_ms(200);  // Adjust this delay based on how often you want to print data
+        sleep_ms(5);  // Adjust this delay based on how often you want to print data
     }
 }
 
@@ -132,9 +140,9 @@ int main()
 
     // display_header("IMU Test and Calibration");
 
-    // printf("Starting IMU calibration with %d samples...\n", CALIBRATION_SAMPLES);
-    // icm42688_calibrate_gyro(i2c_default, CALIBRATION_SAMPLES);
-    // printf("Calibration complete.\n\n");
+    printf("Starting IMU calibration with %d samples...\n", CALIBRATION_SAMPLES);
+    icm42688_calibrate(i2c_default, CALIBRATION_SAMPLES);
+    printf("Calibration complete.\n\n");
     int counter = 0;
     while (true)
     {
